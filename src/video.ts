@@ -1,0 +1,656 @@
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 1994  David Alan Gilbert
+Copyright (C) 1994  Nigel Magnay
+Copyright (C) 1997  Mike Wyatt
+Copyright (C) 2001  Richard Gellman
+Copyright (C) 2008  Rich Talbot-Watkins
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
+import { BeebMemPtrWithWrap, getMem } from "./beebmem";
+import { colPalette, getScreenBuffer, updateLines } from "./beebwin";
+
+export const drawWidth = 800;
+export const drawHeight = 512;
+
+// from header
+
+const MAX_VIDEO_SCAN_LINES = 312;
+
+function GetLinePtr(y: number) {
+  return Math.min(y * 800 + ScreenAdjust, MAX_VIDEO_SCAN_LINES * 800);
+}
+
+// main
+
+/* Bit assignments in control reg:
+   0 - Flash colour (0=first colour, 1=second)
+   1 - Teletext select (0=on chip serialiser, 1=teletext)
+ 2,3 - Bytes per line (2,3=1,1 is 80, 1,0=40, 0,1=20, 0,0=10)
+   4 - CRTC Clock chip select (0 = low frequency, 1= high frequency)
+ 5,6 - Cursor width in bytes (0,0 = 1 byte, 0,1=not defined, 1,0=2, 1,1=4)
+   7 - Master cursor width (if set causes large cursor)
+  */
+
+let FastTableDWidth: [
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  e: number,
+  f: number,
+  g: number,
+  h: number,
+  i: number,
+  j: number,
+  k: number,
+  l: number,
+  m: number,
+  n: number,
+  o: number,
+  p: number,
+][] = [];
+let FastTable_Valid = false;
+
+let LineRoutine: (() => void) | undefined;
+
+// Translates middle bits of VideoULA_ControlReg to number of colours
+const NColsLookup = [
+  16,
+  4,
+  2,
+  0 /* Not supported 16? */,
+  0,
+  16,
+  4,
+  2, // Based on AUG 379
+] as const;
+
+let VideoULA_ControlReg = 0x9c; // VidULA
+const VideoULA_Palette = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+// let CRTCControlReg = 0; // unsigned char
+let CRTC_HorizontalTotal = 127; /* R0 */
+let CRTC_HorizontalDisplayed = 80; /* R1 */
+let CRTC_HorizontalSyncPos = 98; /* R2 */
+let CRTC_SyncWidth = 0x28; /* R3 - top 4 bits are Vertical (in scan lines) and bottom 4 are horizontal in characters */
+let CRTC_VerticalTotal = 38; /* R4 */
+let CRTC_VerticalTotalAdjust = 0; /* R5 */
+let CRTC_VerticalDisplayed = 32; /* R6 */
+let CRTC_VerticalSyncPos = 34; /* R7 */
+let CRTC_InterlaceAndDelay = 0; /* R8 - 0,1 are interlace modes, 4,5 display blanking delay, 6,7 cursor blanking delay */
+let CRTC_ScanLinesPerChar = 7; /* R9 */
+// let CRTC_CursorStart = 0; /* R10 */
+// let CRTC_CursorEnd = 0; /* R11 */
+let CRTC_ScreenStartHigh = 6; /* R12 */
+let CRTC_ScreenStartLow = 0; /* R13 */
+// let CRTC_CursorPosHigh = 0; /* R14 */
+// let CRTC_CursorPosLow = 0; /* R15 */
+// let CRTC_LightPenHigh=0;          /* R16 */
+// let CRTC_LightPenLow=0;           /* R17 */
+
+let ActualScreenWidth = 640;
+export const getActualScreenWidth = () => ActualScreenWidth;
+let ScreenAdjust = 0; // Mode 7 Defaults.
+let VScreenAdjust = 0;
+let HSyncModifier = 0x10; //9;
+let TeletextEnabled = false;
+export const getTeletextEnabled = () => TeletextEnabled;
+// let TeletextStyle = 1; // Defines whether teletext will skip intermediate lines in order to speed up
+// let CurY = -1;
+
+/* CharLine counts from the 'reference point' - i.e. the point at which we reset the address pointer - NOT
+  the point of the sync. If it is -ve its actually in the adjust time */
+type VideoState = {
+  Addr: number /* Address of start of next visible character line in beeb memory  - raw */;
+  StartAddr: number /* Address of start of first character line in beeb memory  - raw */;
+  PixmapLine: number /* Current line in the pixmap */;
+  FirstPixmapLine: number /* The first pixmap line where something is visible.  Used to eliminate the
+                            blank vertical retrace lines at the top of the screen. */;
+  PreviousFirstPixmapLine: number /* The first pixmap line on the previous frame */;
+  LastPixmapLine: number /* The last pixmap line where something is visible.  Used to eliminate the
+                            blank vertical retrace lines at the bottom of the screen. */;
+  PreviousLastPixmapLine: number /* The last pixmap line on the previous frame */;
+  IsTeletext: boolean /* This frame is a teletext frame - do things differently */;
+  DataPtr: number /* Pointer into host memory of video data */;
+
+  CharLine: number /* 6845 counts in characters vertically - 0 at the top , incs by 1 - -1 means we are in the bit before the actual display starts */;
+  InCharLineUp: number /* Scanline within a character line - counts up*/;
+  VSyncState: number; // Cannot =0 in MSVC $NRM; /* When >0 VSync is high */
+  IsNewTVFrame: boolean; // Specifies the start of a new TV frame, following VSync (used so we only calibrate speed once per frame)
+  InterlaceFrame: boolean;
+  DoCA1Int: boolean;
+};
+
+let VideoState: VideoState = {
+  Addr: 0,
+  StartAddr: 0,
+  PixmapLine: 0,
+  FirstPixmapLine: 0,
+  PreviousFirstPixmapLine: 0,
+  LastPixmapLine: 0,
+  PreviousLastPixmapLine: 0,
+  IsTeletext: false,
+  DataPtr: 0,
+  CharLine: 0,
+  InCharLineUp: 0,
+  VSyncState: 0,
+  IsNewTVFrame: false,
+  InterlaceFrame: false,
+  DoCA1Int: false,
+};
+
+//   int VideoTriggerCount=9999; /* Number of cycles before next scanline service */
+
+// // First subscript is graphics flag (1 for graphics, 2 for separated graphics),
+// // next is character, then scanline
+// // character is (value & 127) - 32
+// // There are 20 rows, to account for "half pixels"
+// static unsigned int Mode7Font[3][96][20];
+
+// static bool Mode7FlashOn = true; // true if a flashing character in mode 7 is on
+// static bool Mode7DoubleHeightFlags[80]; // Pessimistic size for this flags - if true then corresponding character on NEXT line is top half
+// static bool CurrentLineBottom = false;
+// static bool NextLineBottom = false; // true if the next line of double height should be bottoms only
+
+// /* Flash every half second(?) i.e. 25 x 50Hz fields */
+// // No. On time is longer than off time. - according to my datasheet, its 0.75Hz with 3:1 ON:OFF ratio. - Richard Gellman
+// // cant see that myself.. i think it means on for 0.75 secs, off for 0.25 secs
+// #define MODE7FLASHFREQUENCY 25
+// #define MODE7ONFIELDS 37
+// #define MODE7OFFFIELDS 13
+
+// int CursorFieldCount = 32;
+// bool CursorOnState = true;
+// int Mode7FlashTrigger=MODE7ONFIELDS;
+
+// /* If 1 then refresh on every display, else refresh every n'th display */
+// int Video_RefreshFrequency=1;
+
+/* The number of the current frame - starts at Video_RefreshFrequency - at 0 actually refresh */
+let FrameNum = 0;
+
+/*-------------------------------------------------------------------------------------------------------------*/
+/* Some guess work and experimentation has determined that the left most pixel uses bits 7,5,3,1 for the       */
+/* palette address, the next uses 6,4,2,0, the next uses 5,3,1,H (H=High), then 5,2,0,H                        */
+function DoFastTable4XStep4() {
+  for (let beebpixv = 0; beebpixv < 256; beebpixv++) {
+    FastTableDWidth[beebpixv] = [
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    let pentry =
+      (beebpixv & 128 ? 8 : 0) |
+      (beebpixv & 32 ? 4 : 0) |
+      (beebpixv & 8 ? 2 : 0) |
+      (beebpixv & 2 ? 1 : 0);
+
+    let tmp = VideoULA_Palette[pentry];
+
+    if (tmp > 7) {
+      tmp &= 7;
+      if (VideoULA_ControlReg & 1) tmp ^= 7;
+    }
+
+    FastTableDWidth[beebpixv][0] =
+      FastTableDWidth[beebpixv][1] =
+      FastTableDWidth[beebpixv][2] =
+      FastTableDWidth[beebpixv][3] =
+        tmp;
+
+    pentry =
+      (beebpixv & 64 ? 8 : 0) |
+      (beebpixv & 16 ? 4 : 0) |
+      (beebpixv & 4 ? 2 : 0) |
+      (beebpixv & 1 ? 1 : 0);
+
+    tmp = VideoULA_Palette[pentry];
+
+    if (tmp > 7) {
+      tmp &= 7;
+      if (VideoULA_ControlReg & 1) tmp ^= 7;
+    }
+
+    FastTableDWidth[beebpixv][4] =
+      FastTableDWidth[beebpixv][5] =
+      FastTableDWidth[beebpixv][6] =
+      FastTableDWidth[beebpixv][7] =
+        tmp;
+
+    pentry =
+      (beebpixv & 32 ? 8 : 0) |
+      (beebpixv & 8 ? 4 : 0) |
+      (beebpixv & 2 ? 2 : 0) |
+      1;
+
+    tmp = VideoULA_Palette[pentry];
+
+    if (tmp > 7) {
+      tmp &= 7;
+      if (VideoULA_ControlReg & 1) tmp ^= 7;
+    }
+
+    FastTableDWidth[beebpixv][8] =
+      FastTableDWidth[beebpixv][9] =
+      FastTableDWidth[beebpixv][10] =
+      FastTableDWidth[beebpixv][11] =
+        tmp;
+
+    pentry =
+      (beebpixv & 16 ? 8 : 0) |
+      (beebpixv & 4 ? 4 : 0) |
+      (beebpixv & 1 ? 2 : 0) |
+      1;
+
+    tmp = VideoULA_Palette[pentry];
+
+    if (tmp > 7) {
+      tmp &= 7;
+      if (VideoULA_ControlReg & 1) tmp ^= 7;
+    }
+
+    FastTableDWidth[beebpixv][12] =
+      FastTableDWidth[beebpixv][13] =
+      FastTableDWidth[beebpixv][14] =
+      FastTableDWidth[beebpixv][15] =
+        tmp;
+  }
+}
+
+/*-------------------------------------------------------------------------------------------------------------*/
+
+/* Rebuild fast table.
+   The fast table accelerates the translation of beeb video memory
+   values into X pixel values */
+
+function DoFastTable() {
+  if ((CRTC_HorizontalDisplayed & 3) == 0) {
+    if (VideoULA_ControlReg & 0x10) {
+      throw "not impl";
+      //LineRoutine = LowLevelDoScanLineNarrow;
+    }
+    LineRoutine = LowLevelDoScanLineWide;
+  } else {
+    throw "not impl";
+    // LineRoutine =
+    //   VideoULA_ControlReg & 0x10
+    //     ? LowLevelDoScanLineNarrowNot4Bytes
+    //     : LowLevelDoScanLineWideNot4Bytes;
+  }
+
+  //What happens next depends on the number of colours
+  switch (NColsLookup[(VideoULA_ControlReg & 0x1c) >> 2]) {
+    case 2:
+      if (VideoULA_ControlReg & 0x10) {
+        throw "not impl";
+        //DoFastTable2();
+      } else {
+        throw "not impl";
+        //DoFastTable2XStep2();
+      }
+      FastTable_Valid = true;
+      break;
+
+    case 4:
+      if (VideoULA_ControlReg & 0x10) {
+        throw "not impl";
+        //DoFastTable4();
+      } else {
+        //throw "not impl";
+        DoFastTable4XStep4();
+      }
+      FastTable_Valid = true;
+      break;
+
+    case 16:
+      if (VideoULA_ControlReg & 0x10) {
+        throw "not impl";
+        //DoFastTable16();
+      } else {
+        throw "not impl";
+        //DoFastTable16XStep8();
+      }
+      FastTable_Valid = true;
+      break;
+
+    default:
+      break;
+  }
+}
+
+/*-------------------------------------------------------------------------------------------------------------*/
+//#define BEEB_DOTIME_SAMPLESIZE 50
+
+function VideoStartOfFrame() {
+  /* FrameNum is determined by the window handler */
+  if (VideoState.IsNewTVFrame) {
+    // RTW - only calibrate timing once per frame
+    VideoState.IsNewTVFrame = false;
+    //FrameNum = mainWin->StartOfFrame();
+
+    // CursorFieldCount--;
+    // Mode7FlashTrigger--;
+    VideoState.InterlaceFrame = !VideoState.InterlaceFrame;
+  }
+
+  // Cursor update for blink. I thought I'd put it here, as this is where the mode 7 flash field thingy is too
+  // - Richard Gellman
+  // if (CursorFieldCount<0) {
+  //   int CurStart = CRTC_CursorStart & 0x60;
+
+  //   if (CurStart == 0) {
+  //     // 0 is cursor displays, but does not blink
+  //     CursorFieldCount = 0;
+  //     CursorOnState = true;
+  //   }
+  //   else if (CurStart == 0x20) {
+  //     // 32 is no cursor
+  //     CursorFieldCount = 0;
+  //     CursorOnState = false;
+  //   }
+  //   else if (CurStart == 0x40) {
+  //     // 64 is 1/16 fast blink
+  //     CursorFieldCount = 8;
+  //     CursorOnState = !CursorOnState;
+  //   }
+  //   else if (CurStart == 0x60) {
+  //     // 96 is 1/32 slow blink
+  //     CursorFieldCount = 16;
+  //     CursorOnState = !CursorOnState;
+  //   }
+  // }
+
+  // RTW - The meaning of CharLine has changed: -1 no longer means that we are in the vertical
+  // total adjust period, and this is no longer handled as if it were at the beginning of a new CRTC cycle.
+  // Hence, here we always set CharLine to 0.
+  VideoState.CharLine = 0;
+  VideoState.InCharLineUp = 0;
+
+  VideoState.Addr = VideoState.StartAddr =
+    CRTC_ScreenStartLow + (CRTC_ScreenStartHigh << 8);
+
+  VideoState.IsTeletext = (VideoULA_ControlReg & 2) != 0;
+
+  // if (VideoState.IsTeletext) {
+  //   // O aye. this is the mode 7 flash section is it? Modified for corrected flash settings - Richard Gellman
+  //   if (Mode7FlashTrigger<0) {
+  //     Mode7FlashTrigger = Mode7FlashOn ? MODE7OFFFIELDS : MODE7ONFIELDS;
+  //     Mode7FlashOn = !Mode7FlashOn; // toggle flash state
+  //   }
+  // }
+
+  // const int IL_Multiplier = (CRTC_InterlaceAndDelay & 1) ? 2 : 1;
+
+  // if (VideoState.InterlaceFrame) {
+  //   IncTrigger((IL_Multiplier*(CRTC_HorizontalTotal+1)*((VideoULA_ControlReg & 16)?1:2)),VideoTriggerCount); /* Number of 2MHz cycles until another scanline needs doing */
+  // } else {
+  //   IncTrigger(((CRTC_HorizontalTotal+1)*((VideoULA_ControlReg & 16)?1:2)),VideoTriggerCount); /* Number of 2MHz cycles until another scanline needs doing */
+  // }
+}
+
+/*-----------------------------------------------------------------------------*/
+/* Scanline processing for the low clock rate modes                            */
+function LowLevelDoScanLineWide() {
+  const mem = getMem();
+  const screenBuffer = getScreenBuffer();
+  let BytesToGo = CRTC_HorizontalDisplayed;
+
+  let vidPtr = GetLinePtr(VideoState.PixmapLine);
+
+  /* If the step is 4 then each byte corresponds to one entry in the fasttable
+     and thus we can copy it really easily (and fast!) */
+  let CurrentPtr = VideoState.DataPtr + VideoState.InCharLineUp;
+
+  /* This should help the compiler - it doesn't need to test for end of loop
+     except every 4 entries */
+  BytesToGo /= 4;
+
+  for (; BytesToGo; CurrentPtr += 32, BytesToGo--) {
+    for (let j = 0; j < 32; j += 8) {
+      const colBits = FastTableDWidth[mem[CurrentPtr + j]];
+      for (let i = 0; i < 16; i++) {
+        screenBuffer[vidPtr++] = colPalette[colBits[i]];
+      }
+    }
+  }
+}
+
+/*-------------------------------------------------------------------------------------------------------------*/
+/* Actually does the work of decoding beeb memory and plotting the line to X */
+function LowLevelDoScanLine() {
+  if (!FastTable_Valid) {
+    // Update acceleration tables
+    DoFastTable();
+  }
+
+  if (FastTable_Valid) {
+    LineRoutine?.();
+  }
+}
+
+///
+
+export function VideoDoScanLine() {
+  const screenBuffer = getScreenBuffer();
+  // Handle VSync
+  // RTW - this was moved to the top so that we can correctly set R7=0,
+  // i.e. we can catch it before the line counters are incremented
+  if (VideoState.VSyncState) {
+    if (!--VideoState.VSyncState) {
+      //SysVIATriggerCA1Int(0);
+    }
+  }
+
+  if (
+    VideoState.VSyncState == 0 &&
+    VideoState.CharLine == CRTC_VerticalSyncPos &&
+    VideoState.InCharLineUp == 0
+  ) {
+    // Nothing displayed?
+    if (VideoState.FirstPixmapLine < 0) VideoState.FirstPixmapLine = 0;
+
+    VideoState.PreviousFirstPixmapLine = VideoState.FirstPixmapLine;
+    VideoState.FirstPixmapLine = -1;
+    VideoState.PreviousLastPixmapLine = VideoState.LastPixmapLine;
+    VideoState.LastPixmapLine = 0;
+    VideoState.PixmapLine = 0;
+    VideoState.IsNewTVFrame = true;
+
+    //SysVIATriggerCA1Int(1);
+    VideoState.VSyncState = CRTC_SyncWidth >> 4;
+  }
+
+  /* Clear the scan line */
+  if (!FrameNum) {
+    screenBuffer.fill(
+      0xff000000,
+      GetLinePtr(VideoState.PixmapLine),
+      GetLinePtr(VideoState.PixmapLine) + 800,
+    );
+  }
+
+  if (VideoState.CharLine < CRTC_VerticalDisplayed) {
+    // Visible char line, record first line
+    if (VideoState.FirstPixmapLine == -1)
+      VideoState.FirstPixmapLine = VideoState.PixmapLine;
+    // Always record the last line
+    VideoState.LastPixmapLine = VideoState.PixmapLine;
+
+    /* If first row of character then get the data pointer from memory */
+    if (VideoState.InCharLineUp == 0) {
+      VideoState.DataPtr = BeebMemPtrWithWrap(
+        VideoState.Addr * 8,
+        CRTC_HorizontalDisplayed * 8,
+      );
+
+      VideoState.Addr += CRTC_HorizontalDisplayed;
+    }
+
+    if (
+      VideoState.InCharLineUp < 8 &&
+      (CRTC_InterlaceAndDelay & 0x30) != 0x30
+    ) {
+      if (!FrameNum) LowLevelDoScanLine();
+    }
+  }
+
+  // See if we are at the cursor line
+  // if (CurY == -1 && VideoState.Addr > (CRTC_CursorPosLow + (CRTC_CursorPosHigh << 8))) {
+  //   CurY = VideoState.PixmapLine;
+  // }
+
+  // Screen line increment and wraparound
+  if (++VideoState.PixmapLine == MAX_VIDEO_SCAN_LINES) {
+    VideoState.PixmapLine = 0;
+  }
+
+  /* Move onto next physical scanline as far as timing is concerned */
+  VideoState.InCharLineUp += 1;
+
+  // RTW - check whether we have reached a new character row.
+  // if CharLine>CRTC_VerticalTotal, we are in the vertical total adjust region so we don't wrap to a new row.
+  if (
+    VideoState.CharLine <= CRTC_VerticalTotal &&
+    VideoState.InCharLineUp > CRTC_ScanLinesPerChar
+  ) {
+    VideoState.CharLine++;
+    VideoState.InCharLineUp = 0;
+  }
+
+  // RTW - neater way of detecting the end of the PAL frame, which doesn't require making a special case
+  // of the vertical total adjust period.
+  if (
+    VideoState.CharLine > CRTC_VerticalTotal &&
+    VideoState.InCharLineUp >= CRTC_VerticalTotalAdjust
+  ) {
+    VScreenAdjust = 0;
+    if (!FrameNum && VideoState.IsNewTVFrame) {
+      // VideoAddCursor();
+      // VideoAddLEDs();
+      //CurY=-1;
+      let n =
+        VideoState.PreviousLastPixmapLine -
+        VideoState.PreviousFirstPixmapLine +
+        1;
+      if (n < 0) {
+        n += MAX_VIDEO_SCAN_LINES;
+      }
+
+      let startLine = 32;
+      if (n > 248 && VideoState.PreviousFirstPixmapLine >= 40) {
+        // RTW -
+        // This is a little hack which ensures that a fullscreen mode with *TV255 will always
+        // fit unclipped in the window in Modes 0-6
+        startLine = 40;
+      }
+
+      updateLines(startLine, 256);
+    }
+    VideoStartOfFrame();
+    AdjustVideo();
+    return false; //
+  } else {
+    // IncTrigger(
+    //   (CRTC_HorizontalTotal + 1) * (VideoULA_ControlReg & 16 ? 1 : 2),
+    //   VideoTriggerCount,
+    // );
+  }
+  return true; //
+}
+
+/*-------------------------------------------------------------------------------------------------------------*/
+function AdjustVideo() {
+  ActualScreenWidth = CRTC_HorizontalDisplayed * HSyncModifier;
+
+  if (ActualScreenWidth > 800) {
+    ActualScreenWidth = 800;
+  } else if (ActualScreenWidth < 640) {
+    ActualScreenWidth = 640;
+  }
+
+  let InitialOffset =
+    0 - ((CRTC_HorizontalTotal + 1) / 2 - (HSyncModifier == 8 ? 40 : 20));
+  let HStart =
+    InitialOffset +
+    (CRTC_HorizontalTotal +
+      1 -
+      (CRTC_HorizontalSyncPos + (CRTC_SyncWidth & 0x0f))) +
+    (HSyncModifier == 8 ? 2 : 1);
+  if (TeletextEnabled) HStart += 2;
+  if (HStart < 0) HStart = 0;
+  ScreenAdjust =
+    HStart * HSyncModifier + (VScreenAdjust > 0 ? VScreenAdjust * 800 : 0);
+}
+
+/*-------------------------------------------------------------------------------------------------------------*/
+export function VideoInit() {
+  VideoStartOfFrame();
+
+  VideoState.DataPtr = BeebMemPtrWithWrap(0x3000, 640);
+  //SetTrigger(99,VideoTriggerCount); /* Give time for OS to set mode up before doing anything silly */
+  FastTable_Valid = false;
+
+  //FrameNum=Video_RefreshFrequency;
+  VideoState.PixmapLine = 0x20; //!!! should be 0;
+  VideoState.FirstPixmapLine = -1;
+  VideoState.PreviousFirstPixmapLine = 0;
+  VideoState.LastPixmapLine = 0;
+  VideoState.PreviousLastPixmapLine = 256;
+  VideoState.IsNewTVFrame = false;
+  //CurY=-1;
+  AdjustVideo(); // !!! temp
+  //  crtclog=fopen("/crtc.log","wb");
+}
+
+type VideoOverrides = {
+  CRTC_HorizontalTotal: number;
+  CRTC_HorizontalDisplayed: number;
+  CRTC_HorizontalSyncPos: number;
+  CRTC_SyncWidth: number;
+  CRTC_VerticalTotal: number;
+  CRTC_VerticalTotalAdjust: number;
+  CRTC_VerticalDisplayed: number;
+  CRTC_VerticalSyncPos: number;
+  CRTC_InterlaceAndDelay: number;
+  CRTC_ScanLinesPerChar: number;
+  CRTC_ScreenStartHigh: number;
+  CRTC_ScreenStartLow: number;
+  VideoULA_ControlReg: number;
+  VideoULA_Palette: number[];
+};
+export function tempVideoOverride(videoOverrides: VideoOverrides) {
+  ({
+    CRTC_HorizontalTotal,
+    CRTC_HorizontalDisplayed,
+    CRTC_HorizontalSyncPos,
+    CRTC_SyncWidth,
+    CRTC_VerticalTotal,
+    CRTC_VerticalTotalAdjust,
+    CRTC_VerticalDisplayed,
+    CRTC_VerticalSyncPos,
+    CRTC_InterlaceAndDelay,
+    CRTC_ScanLinesPerChar,
+    CRTC_ScreenStartHigh,
+    CRTC_ScreenStartLow,
+  } = videoOverrides);
+
+  VideoULA_ControlReg = videoOverrides.VideoULA_ControlReg;
+
+  for (let i = 0; i < 16; i++) {
+    VideoULA_Palette[i] = videoOverrides.VideoULA_Palette[i];
+  }
+}

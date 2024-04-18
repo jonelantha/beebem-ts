@@ -1,17 +1,68 @@
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 1994  David Alan Gilbert
+Copyright (C) 1994  Nigel Magnay
+Copyright (C) 1997  Mike Wyatt
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
+import { initScreen } from "./beebwin";
+import { tempVideoOverride, VideoDoScanLine, VideoInit } from "./video";
+import { initMem } from "./beebmem";
+
 import "./style.css";
 
-const canvas = document.getElementById("canvas") as HTMLCanvasElement;
+async function run() {
+  const params = new URLSearchParams(window.location.search);
 
-const width = 100;
-const height = 100;
+  tempVideoOverride({
+    CRTC_HorizontalTotal: parseInt(params.get("CRTC_HorizontalTotal")!, 16),
+    CRTC_HorizontalDisplayed: parseInt(
+      params.get("CRTC_HorizontalDisplayed")!,
+      16,
+    ),
+    CRTC_HorizontalSyncPos: parseInt(params.get("CRTC_HorizontalSyncPos")!, 16),
+    CRTC_SyncWidth: parseInt(params.get("CRTC_SyncWidth")!, 16),
+    CRTC_VerticalTotal: parseInt(params.get("CRTC_VerticalTotal")!, 16),
+    CRTC_VerticalTotalAdjust: parseInt(
+      params.get("CRTC_VerticalTotalAdjust")!,
+      16,
+    ),
+    CRTC_VerticalDisplayed: parseInt(params.get("CRTC_VerticalDisplayed")!, 16),
+    CRTC_VerticalSyncPos: parseInt(params.get("CRTC_VerticalSyncPos")!, 16),
+    CRTC_InterlaceAndDelay: parseInt(params.get("CRTC_InterlaceAndDelay")!, 16),
+    CRTC_ScanLinesPerChar: parseInt(params.get("CRTC_ScanLinesPerChar")!, 16),
+    CRTC_ScreenStartHigh: parseInt(params.get("CRTC_ScreenStartHigh")!, 16),
+    CRTC_ScreenStartLow: parseInt(params.get("CRTC_ScreenStartLow")!, 16),
+    VideoULA_ControlReg: parseInt(params.get("VideoULA_ControlReg")!, 16),
+    VideoULA_Palette: params
+      .get("VideoULA_Palette")!
+      .split(",")
+      .map(val => parseInt(val, 10)),
+  });
 
-canvas.width = width;
-canvas.height = height;
+  const memFile = params.get("mem");
+  if (!memFile) return;
 
-const imageData = new ImageData(width, height);
-const destBuffer = new Uint32Array(imageData.data.buffer);
+  initScreen();
+  await initMem(memFile);
 
-destBuffer[0] = 0xff00ff00;
+  VideoInit();
+  while (VideoDoScanLine()) {}
+}
 
-const context = canvas.getContext("2d")!;
-context.putImageData(imageData, 0, 0, 0, 0, width, height);
+run();
