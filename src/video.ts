@@ -30,6 +30,7 @@ import {
   SixteenUChars,
   updateLines,
   writeSixteenUChars,
+  tempUpdate,
 } from "./beebwin";
 
 export const drawWidth = 800;
@@ -178,6 +179,34 @@ let FrameNum = 0;
 
 // Build enhanced mode 7 font
 
+function tempDrawChar(fontType: number, char: number, x: number, y: number) {
+  const screenBuffer = getScreenBuffer();
+  for (let charY = 0; charY < 20; charY++) {
+    const scanline = Mode7Font[Mode7FontIndex(fontType, char, charY)];
+
+    for (let charX = 0; charX < 16; charX++) {
+      const bit = 1 << (16 - charX);
+      screenBuffer[charX + x * 16 + drawWidth * (charY + y * 20)] =
+        scanline & bit ? 0xff000000 : 0;
+    }
+  }
+}
+
+function tempPlotCharset(fontType: number) {
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i < 96; i++) {
+    tempDrawChar(fontType, i, x, y);
+
+    x++;
+    if (x === 20) {
+      x = 0;
+      y++;
+    }
+  }
+  tempUpdate();
+}
+
 export async function BuildMode7Font(filename: string) {
   const res = await fetch(filename);
   const buffer = await res.arrayBuffer();
@@ -275,6 +304,8 @@ export async function BuildMode7Font(filename: string) {
       Mode7Font[Mode7FontIndex(2, Character, 19)] = 0;
     }
   }
+
+  //tempPlotCharset(0);
 }
 
 /*-------------------------------------------------------------------------------------------------------------*/

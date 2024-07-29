@@ -110,6 +110,13 @@ export const colPalette = [
 
 export const getScreenBuffer = () => screenBuffer;
 
+export function tempUpdate() {
+  const drawCanvas = document.getElementById("drawCanvas") as HTMLCanvasElement;
+
+  const context = drawCanvas.getContext("2d")!;
+  context.putImageData(imageData, 0, 0, 0, 0, drawWidth, drawHeight);
+}
+
 export function updateLines(startLine: number, nlines: number) {
   const drawCanvas = document.getElementById("drawCanvas") as HTMLCanvasElement;
 
