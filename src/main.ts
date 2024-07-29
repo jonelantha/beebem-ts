@@ -72,7 +72,11 @@ async function run() {
 
   await BuildMode7Font("/Teletext.fnt");
 
-  while (VideoDoScanLine()) {}
+  function doFrame() {
+    while (VideoDoScanLine()) {}
+    requestAnimationFrame(doFrame);
+  }
+  doFrame();
 }
 
 run();

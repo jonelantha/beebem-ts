@@ -162,12 +162,12 @@ let NextLineBottom = false; // true if the next line of double height should be 
 // // No. On time is longer than off time. - according to my datasheet, its 0.75Hz with 3:1 ON:OFF ratio. - Richard Gellman
 // // cant see that myself.. i think it means on for 0.75 secs, off for 0.25 secs
 // #define MODE7FLASHFREQUENCY 25
-// #define MODE7ONFIELDS 37
-// #define MODE7OFFFIELDS 13
+const MODE7ONFIELDS = 37;
+const MODE7OFFFIELDS = 13;
 
 // int CursorFieldCount = 32;
 // bool CursorOnState = true;
-// int Mode7FlashTrigger=MODE7ONFIELDS;
+let Mode7FlashTrigger = MODE7ONFIELDS;
 
 // /* If 1 then refresh on every display, else refresh every n'th display */
 // int Video_RefreshFrequency=1;
@@ -467,7 +467,7 @@ function VideoStartOfFrame() {
     //FrameNum = mainWin->StartOfFrame();
 
     // CursorFieldCount--;
-    // Mode7FlashTrigger--;
+    Mode7FlashTrigger--;
     VideoState.InterlaceFrame = !VideoState.InterlaceFrame;
   }
 
@@ -509,13 +509,13 @@ function VideoStartOfFrame() {
 
   VideoState.IsTeletext = (VideoULA_ControlReg & 2) != 0;
 
-  // if (VideoState.IsTeletext) {
-  //   // O aye. this is the mode 7 flash section is it? Modified for corrected flash settings - Richard Gellman
-  //   if (Mode7FlashTrigger<0) {
-  //     Mode7FlashTrigger = Mode7FlashOn ? MODE7OFFFIELDS : MODE7ONFIELDS;
-  //     Mode7FlashOn = !Mode7FlashOn; // toggle flash state
-  //   }
-  // }
+  if (VideoState.IsTeletext) {
+    // O aye. this is the mode 7 flash section is it? Modified for corrected flash settings - Richard Gellman
+    if (Mode7FlashTrigger < 0) {
+      Mode7FlashTrigger = Mode7FlashOn ? MODE7OFFFIELDS : MODE7ONFIELDS;
+      Mode7FlashOn = !Mode7FlashOn; // toggle flash state
+    }
+  }
 
   // const int IL_Multiplier = (CRTC_InterlaceAndDelay & 1) ? 2 : 1;
 
