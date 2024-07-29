@@ -21,7 +21,12 @@ Boston, MA  02110-1301, USA.
 ****************************************************************/
 
 import { initScreen } from "./beebwin";
-import { tempVideoOverride, VideoDoScanLine, VideoInit } from "./video";
+import {
+  BuildMode7Font,
+  tempVideoOverride,
+  VideoDoScanLine,
+  VideoInit,
+} from "./video";
 import { initMem } from "./beebmem";
 
 import "./style.css";
@@ -58,10 +63,15 @@ async function run() {
   const memFile = params.get("mem");
   if (!memFile) return;
 
+  // reset
   initScreen();
   await initMem(memFile);
 
   VideoInit();
+  // end reset
+
+  await BuildMode7Font("/Teletext.fnt");
+
   while (VideoDoScanLine()) {}
 }
 

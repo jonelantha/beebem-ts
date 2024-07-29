@@ -34,7 +34,62 @@ import {
   drawWidth,
   getActualScreenWidth,
   getTeletextEnabled,
+  getScreenAdjust,
+  MAX_VIDEO_SCAN_LINES,
+  getTeletextStyle,
 } from "./video";
+
+// from header
+
+export type SixteenUChars = [
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  e: number,
+  f: number,
+  g: number,
+  h: number,
+  i: number,
+  j: number,
+  k: number,
+  l: number,
+  m: number,
+  n: number,
+  o: number,
+  p: number,
+];
+
+export function GetLinePtr(y: number) {
+  return Math.min(y * 800 + getScreenAdjust(), MAX_VIDEO_SCAN_LINES * 800);
+}
+
+export function doHorizLine(
+  Colour: number,
+  y: number,
+  sx: number,
+  width: number,
+) {
+  if (getTeletextEnabled()) y /= getTeletextStyle();
+  const d = y * 800 + sx + getScreenAdjust() + (getTeletextEnabled() ? 36 : 0);
+  if (d + width > 500 * 800) return;
+  if (d < 0) return;
+  screenBuffer.fill(colPalette[Colour], d, d + width);
+}
+
+// video helper
+
+export function writeSixteenUChars(
+  vidPtr: number,
+  sixteenUChars: SixteenUChars,
+) {
+  for (let i = 0; i < 16; i++) {
+    screenBuffer[vidPtr++] = colPalette[sixteenUChars[i]];
+  }
+  return vidPtr;
+}
+
+// main
 
 let imageData: ImageData;
 let screenBuffer: Uint32Array;
@@ -68,6 +123,8 @@ export function updateLines(startLine: number, nlines: number) {
   finalCanvas.width = finalWidth;
   finalCanvas.height = finalHeight;
 
+  const TeletextLines = 500 / getTeletextStyle();
+
   const finalContext = finalCanvas.getContext("2d")!;
 
   finalContext.drawImage(
@@ -75,7 +132,7 @@ export function updateLines(startLine: number, nlines: number) {
     0,
     startLine,
     getTeletextEnabled() ? 552 : getActualScreenWidth(),
-    getTeletextEnabled() ? /*!!! TeletextLines*/ 0 : nlines,
+    getTeletextEnabled() ? TeletextLines : nlines,
     0,
     0,
     finalWidth,
