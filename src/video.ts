@@ -362,6 +362,75 @@ function DoFastTable16() {
 /*-------------------------------------------------------------------------------------------------------------*/
 /* Some guess work and experimentation has determined that the left most pixel uses bits 7,5,3,1 for the       */
 /* palette address, the next uses 6,4,2,0, the next uses 5,3,1,H (H=High), then 5,2,0,H                        */
+function DoFastTable4() {
+  for (let beebpixv = 0; beebpixv < 256; beebpixv++) {
+    FastTable[beebpixv] = [0, 0, 0, 0, 0, 0, 0, 0];
+
+    let pentry =
+      (beebpixv & 128 ? 8 : 0) |
+      (beebpixv & 32 ? 4 : 0) |
+      (beebpixv & 8 ? 2 : 0) |
+      (beebpixv & 2 ? 1 : 0);
+
+    let tmp = VideoULA_Palette[pentry];
+
+    if (tmp > 7) {
+      tmp &= 7;
+      if (VideoULA_ControlReg & 1) tmp ^= 7;
+    }
+
+    FastTable[beebpixv][0] = FastTable[beebpixv][1] = tmp;
+
+    pentry =
+      (beebpixv & 64 ? 8 : 0) |
+      (beebpixv & 16 ? 4 : 0) |
+      (beebpixv & 4 ? 2 : 0) |
+      (beebpixv & 1 ? 1 : 0);
+
+    tmp = VideoULA_Palette[pentry];
+
+    if (tmp > 7) {
+      tmp &= 7;
+      if (VideoULA_ControlReg & 1) tmp ^= 7;
+    }
+
+    FastTable[beebpixv][2] = FastTable[beebpixv][3] = tmp;
+
+    pentry =
+      (beebpixv & 32 ? 8 : 0) |
+      (beebpixv & 8 ? 4 : 0) |
+      (beebpixv & 2 ? 2 : 0) |
+      1;
+
+    tmp = VideoULA_Palette[pentry];
+
+    if (tmp > 7) {
+      tmp &= 7;
+      if (VideoULA_ControlReg & 1) tmp ^= 7;
+    }
+
+    FastTable[beebpixv][4] = FastTable[beebpixv][5] = tmp;
+
+    pentry =
+      (beebpixv & 16 ? 8 : 0) |
+      (beebpixv & 4 ? 4 : 0) |
+      (beebpixv & 1 ? 2 : 0) |
+      1;
+
+    tmp = VideoULA_Palette[pentry];
+
+    if (tmp > 7) {
+      tmp &= 7;
+      if (VideoULA_ControlReg & 1) tmp ^= 7;
+    }
+
+    FastTable[beebpixv][6] = FastTable[beebpixv][7] = tmp;
+  }
+}
+
+/*-------------------------------------------------------------------------------------------------------------*/
+/* Some guess work and experimentation has determined that the left most pixel uses bits 7,5,3,1 for the       */
+/* palette address, the next uses 6,4,2,0, the next uses 5,3,1,H (H=High), then 5,2,0,H                        */
 function DoFastTable4XStep4() {
   for (let beebpixv = 0; beebpixv < 256; beebpixv++) {
     FastTableDWidth[beebpixv] = [
@@ -541,8 +610,7 @@ function DoFastTable() {
 
     case 4:
       if (VideoULA_ControlReg & 0x10) {
-        throw "not impl";
-        //DoFastTable4();
+        DoFastTable4();
       } else {
         DoFastTable4XStep4();
       }
