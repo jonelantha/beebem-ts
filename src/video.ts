@@ -447,6 +447,36 @@ function DoFastTable4XStep4() {
 
 /*-------------------------------------------------------------------------------------------------------------*/
 /* Some guess work and experimentation has determined that the left most pixel uses the same pattern as mode 1 */
+/* all the way upto the 5th pixel which uses 31hh then 20hh and then 1hhh then 0hhhh                           */
+function DoFastTable2() {
+  for (let beebpixv = 0; beebpixv < 256; beebpixv++) {
+    let beebpixvt = beebpixv;
+
+    FastTable[beebpixv] = [0, 0, 0, 0, 0, 0, 0, 0];
+    for (let pix = 0; pix < 8; pix++) {
+      let pentry =
+        (beebpixvt & 128 ? 8 : 0) |
+        (beebpixvt & 32 ? 4 : 0) |
+        (beebpixvt & 8 ? 2 : 0) |
+        (beebpixvt & 2 ? 1 : 0);
+
+      beebpixvt <<= 1;
+      beebpixvt |= 1;
+
+      let tmp = VideoULA_Palette[pentry];
+
+      if (tmp > 7) {
+        tmp &= 7;
+        if (VideoULA_ControlReg & 1) tmp ^= 7;
+      }
+
+      FastTable[beebpixv][pix] = tmp;
+    }
+  }
+}
+
+/*-------------------------------------------------------------------------------------------------------------*/
+/* Some guess work and experimentation has determined that the left most pixel uses the same pattern as mode 1 */
 /* all the way upto the 5th pixel which uses 31hh then 20hh and hten 1hhh then 0hhhh                           */
 function DoFastTable2XStep2() {
   for (let beebpixv = 0; beebpixv < 256; beebpixv++) {
@@ -502,8 +532,7 @@ function DoFastTable() {
   switch (NColsLookup[(VideoULA_ControlReg & 0x1c) >> 2]) {
     case 2:
       if (VideoULA_ControlReg & 0x10) {
-        throw "not impl";
-        //DoFastTable2();
+        DoFastTable2();
       } else {
         DoFastTable2XStep2();
       }
