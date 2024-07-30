@@ -32,6 +32,8 @@ import {
   writeSixteenUChars,
   tempUpdate,
   doInvHorizLine,
+  EightUChars,
+  writeEightUChars,
 } from "./beebwin";
 
 export const drawWidth = 800;
@@ -52,6 +54,7 @@ export const MAX_VIDEO_SCAN_LINES = 312;
    7 - Master cursor width (if set causes large cursor)
   */
 
+let FastTable: EightUChars[] = [];
 let FastTableDWidth: SixteenUChars[] = [];
 let FastTable_Valid = false;
 
@@ -310,6 +313,53 @@ export async function BuildMode7Font(filename: string) {
 }
 
 /*-------------------------------------------------------------------------------------------------------------*/
+function DoFastTable16() {
+  for (let beebpixvl = 0; beebpixvl < 16; beebpixvl++) {
+    const bplvopen =
+      (beebpixvl & 8 ? 128 : 0) |
+      (beebpixvl & 4 ? 32 : 0) |
+      (beebpixvl & 2 ? 8 : 0) |
+      (beebpixvl & 1 ? 2 : 0);
+
+    for (let beebpixvr = 0; beebpixvr < 16; beebpixvr++) {
+      const bplvtotal =
+        bplvopen |
+        (beebpixvr & 8 ? 64 : 0) |
+        (beebpixvr & 4 ? 16 : 0) |
+        (beebpixvr & 2 ? 4 : 0) |
+        (beebpixvr & 1 ? 1 : 0);
+      FastTable[bplvtotal] = [0, 0, 0, 0, 0, 0, 0, 0];
+
+      let tmp = VideoULA_Palette[beebpixvl];
+
+      if (tmp > 7) {
+        tmp &= 7;
+        if (VideoULA_ControlReg & 1) tmp ^= 7;
+      }
+
+      FastTable[bplvtotal][0] =
+        FastTable[bplvtotal][1] =
+        FastTable[bplvtotal][2] =
+        FastTable[bplvtotal][3] =
+          tmp;
+
+      tmp = VideoULA_Palette[beebpixvr];
+
+      if (tmp > 7) {
+        tmp &= 7;
+        if (VideoULA_ControlReg & 1) tmp ^= 7;
+      }
+
+      FastTable[bplvtotal][4] =
+        FastTable[bplvtotal][5] =
+        FastTable[bplvtotal][6] =
+        FastTable[bplvtotal][7] =
+          tmp;
+    }
+  }
+}
+
+/*-------------------------------------------------------------------------------------------------------------*/
 /* Some guess work and experimentation has determined that the left most pixel uses bits 7,5,3,1 for the       */
 /* palette address, the next uses 6,4,2,0, the next uses 5,3,1,H (H=High), then 5,2,0,H                        */
 function DoFastTable4XStep4() {
@@ -436,11 +486,10 @@ function DoFastTable2XStep2() {
 
 function DoFastTable() {
   if ((CRTC_HorizontalDisplayed & 3) == 0) {
-    if (VideoULA_ControlReg & 0x10) {
-      throw "not impl";
-      //LineRoutine = LowLevelDoScanLineNarrow;
-    }
-    LineRoutine = LowLevelDoScanLineWide;
+    LineRoutine =
+      VideoULA_ControlReg & 0x10
+        ? LowLevelDoScanLineNarrow
+        : LowLevelDoScanLineWide;
   } else {
     throw "not impl";
     // LineRoutine =
@@ -466,7 +515,6 @@ function DoFastTable() {
         throw "not impl";
         //DoFastTable4();
       } else {
-        //throw "not impl";
         DoFastTable4XStep4();
       }
       FastTable_Valid = true;
@@ -474,8 +522,7 @@ function DoFastTable() {
 
     case 16:
       if (VideoULA_ControlReg & 0x10) {
-        throw "not impl";
-        //DoFastTable16();
+        DoFastTable16();
       } else {
         throw "not impl";
         //DoFastTable16XStep8();
@@ -553,6 +600,28 @@ function VideoStartOfFrame() {
   // } else {
   //   IncTrigger(((CRTC_HorizontalTotal+1)*((VideoULA_ControlReg & 16)?1:2)),VideoTriggerCount); /* Number of 2MHz cycles until another scanline needs doing */
   // }
+}
+
+/*--------------------------------------------------------------------------*/
+/* Scanline processing for modes with fast 6845 clock - i.e. narrow pixels  */
+function LowLevelDoScanLineNarrow() {
+  const mem = getMem();
+  let BytesToGo = CRTC_HorizontalDisplayed;
+  let vidPtr = GetLinePtr(VideoState.PixmapLine);
+
+  /* If the step is 4 then each byte corresponds to one entry in the fasttable
+     and thus we can copy it really easily (and fast!) */
+  let CurrentPtr = VideoState.DataPtr + VideoState.InCharLineUp;
+
+  /* This should help the compiler - it doesn't need to test for end of loop
+     except every 4 entries */
+  BytesToGo /= 4;
+  for (; BytesToGo; CurrentPtr += 32, BytesToGo--) {
+    vidPtr = writeEightUChars(vidPtr, FastTable[mem[CurrentPtr]]);
+    vidPtr = writeEightUChars(vidPtr, FastTable[mem[CurrentPtr + 8]]);
+    vidPtr = writeEightUChars(vidPtr, FastTable[mem[CurrentPtr + 16]]);
+    vidPtr = writeEightUChars(vidPtr, FastTable[mem[CurrentPtr + 24]]);
+  }
 }
 
 /*-----------------------------------------------------------------------------*/

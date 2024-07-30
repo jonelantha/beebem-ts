@@ -41,6 +41,17 @@ import {
 
 // from header
 
+export type EightUChars = [
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  e: number,
+  f: number,
+  g: number,
+  h: number,
+];
+
 export type SixteenUChars = [
   a: number,
   b: number,
@@ -95,6 +106,13 @@ export function doInvHorizLine(
 }
 
 // video helper
+
+export function writeEightUChars(vidPtr: number, eightUChars: EightUChars) {
+  for (let i = 0; i < 8; i++) {
+    screenBuffer[vidPtr++] = colPalette[eightUChars[i]];
+  }
+  return vidPtr;
+}
 
 export function writeSixteenUChars(
   vidPtr: number,
