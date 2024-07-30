@@ -31,6 +31,7 @@ import {
   updateLines,
   writeSixteenUChars,
   tempUpdate,
+  doInvHorizLine,
 } from "./beebwin";
 
 export const drawWidth = 800;
@@ -82,12 +83,12 @@ let CRTC_VerticalDisplayed = 32; /* R6 */
 let CRTC_VerticalSyncPos = 34; /* R7 */
 let CRTC_InterlaceAndDelay = 0; /* R8 - 0,1 are interlace modes, 4,5 display blanking delay, 6,7 cursor blanking delay */
 let CRTC_ScanLinesPerChar = 7; /* R9 */
-// let CRTC_CursorStart = 0; /* R10 */
-// let CRTC_CursorEnd = 0; /* R11 */
+let CRTC_CursorStart = 0; /* R10 */
+let CRTC_CursorEnd = 0; /* R11 */
 let CRTC_ScreenStartHigh = 6; /* R12 */
 let CRTC_ScreenStartLow = 0; /* R13 */
-// let CRTC_CursorPosHigh = 0; /* R14 */
-// let CRTC_CursorPosLow = 0; /* R15 */
+let CRTC_CursorPosHigh = 0; /* R14 */
+let CRTC_CursorPosLow = 0; /* R15 */
 // let CRTC_LightPenHigh=0;          /* R16 */
 // let CRTC_LightPenLow=0;           /* R17 */
 
@@ -101,7 +102,7 @@ let TeletextEnabled = false;
 export const getTeletextEnabled = () => TeletextEnabled;
 let TeletextStyle = 1; // Defines whether teletext will skip intermediate lines in order to speed up
 export const getTeletextStyle = () => TeletextStyle;
-// let CurY = -1;
+let CurY = -1;
 
 /* CharLine counts from the 'reference point' - i.e. the point at which we reset the address pointer - NOT
   the point of the sync. If it is -ve its actually in the adjust time */
@@ -166,8 +167,8 @@ let NextLineBottom = false; // true if the next line of double height should be 
 const MODE7ONFIELDS = 37;
 const MODE7OFFFIELDS = 13;
 
-// int CursorFieldCount = 32;
-// bool CursorOnState = true;
+let CursorFieldCount = 32;
+let CursorOnState = true;
 let Mode7FlashTrigger = MODE7ONFIELDS;
 
 // /* If 1 then refresh on every display, else refresh every n'th display */
@@ -497,37 +498,34 @@ function VideoStartOfFrame() {
     VideoState.IsNewTVFrame = false;
     //FrameNum = mainWin->StartOfFrame();
 
-    // CursorFieldCount--;
+    CursorFieldCount--;
     Mode7FlashTrigger--;
     VideoState.InterlaceFrame = !VideoState.InterlaceFrame;
   }
 
   // Cursor update for blink. I thought I'd put it here, as this is where the mode 7 flash field thingy is too
   // - Richard Gellman
-  // if (CursorFieldCount<0) {
-  //   int CurStart = CRTC_CursorStart & 0x60;
+  if (CursorFieldCount < 0) {
+    const CurStart = CRTC_CursorStart & 0x60;
 
-  //   if (CurStart == 0) {
-  //     // 0 is cursor displays, but does not blink
-  //     CursorFieldCount = 0;
-  //     CursorOnState = true;
-  //   }
-  //   else if (CurStart == 0x20) {
-  //     // 32 is no cursor
-  //     CursorFieldCount = 0;
-  //     CursorOnState = false;
-  //   }
-  //   else if (CurStart == 0x40) {
-  //     // 64 is 1/16 fast blink
-  //     CursorFieldCount = 8;
-  //     CursorOnState = !CursorOnState;
-  //   }
-  //   else if (CurStart == 0x60) {
-  //     // 96 is 1/32 slow blink
-  //     CursorFieldCount = 16;
-  //     CursorOnState = !CursorOnState;
-  //   }
-  // }
+    if (CurStart == 0) {
+      // 0 is cursor displays, but does not blink
+      CursorFieldCount = 0;
+      CursorOnState = true;
+    } else if (CurStart == 0x20) {
+      // 32 is no cursor
+      CursorFieldCount = 0;
+      CursorOnState = false;
+    } else if (CurStart == 0x40) {
+      // 64 is 1/16 fast blink
+      CursorFieldCount = 8;
+      CursorOnState = !CursorOnState;
+    } else if (CurStart == 0x60) {
+      // 96 is 1/32 slow blink
+      CursorFieldCount = 16;
+      CursorOnState = !CursorOnState;
+    }
+  }
 
   // RTW - The meaning of CharLine has changed: -1 no longer means that we are in the vertical
   // total adjust period, and this is no longer handled as if it were at the beginning of a new CRTC cycle.
@@ -917,7 +915,7 @@ export function VideoDoScanLine() {
           (20 / TeletextStyle);
       AdjustVideo();
       if (!FrameNum) {
-        // VideoAddCursor();
+        VideoAddCursor();
         // VideoAddLEDs();
         // Clear rest of screen below virtical total
         for (let l = VideoState.PixmapLine; l < 500 / TeletextStyle; ++l)
@@ -1002,9 +1000,12 @@ export function VideoDoScanLine() {
     }
 
     // See if we are at the cursor line
-    // if (CurY == -1 && VideoState.Addr > (CRTC_CursorPosLow + (CRTC_CursorPosHigh << 8))) {
-    //   CurY = VideoState.PixmapLine;
-    // }
+    if (
+      CurY == -1 &&
+      VideoState.Addr > CRTC_CursorPosLow + (CRTC_CursorPosHigh << 8)
+    ) {
+      CurY = VideoState.PixmapLine;
+    }
 
     // Screen line increment and wraparound
     if (++VideoState.PixmapLine == MAX_VIDEO_SCAN_LINES) {
@@ -1032,9 +1033,9 @@ export function VideoDoScanLine() {
     ) {
       VScreenAdjust = 0;
       if (!FrameNum && VideoState.IsNewTVFrame) {
-        // VideoAddCursor();
+        VideoAddCursor();
         // VideoAddLEDs();
-        //CurY=-1;
+        CurY = -1;
         let n =
           VideoState.PreviousLastPixmapLine -
           VideoState.PreviousFirstPixmapLine +
@@ -1105,7 +1106,7 @@ export function VideoInit() {
   VideoState.LastPixmapLine = 0;
   VideoState.PreviousLastPixmapLine = 256;
   VideoState.IsNewTVFrame = false;
-  //CurY=-1;
+  CurY = -1;
   AdjustVideo(); // !!! temp
   //  crtclog=fopen("/crtc.log","wb");
 }
@@ -1136,6 +1137,86 @@ function VideoULAWrite(Address: number, Value: number) {
   }
 }
 
+/*-------------------------------------------------------------------------------------------------------------*/
+
+function VideoAddCursor() {
+  const CurSizes = [2, 1, 0, 0, 4, 2, 0, 4];
+  let ScrAddr: number, CurAddr: number, RelAddr: number;
+  let CurX: number;
+  let CurSize: number;
+  let CurStart: number, CurEnd: number;
+
+  /* Check if cursor has been hidden */
+  if (
+    (VideoULA_ControlReg & 0xe0) == 0 ||
+    (CRTC_CursorStart & 0x60) == 0x20 ||
+    (CRTC_InterlaceAndDelay & 0xc0) == 0xc0 ||
+    !CursorOnState
+  ) {
+    return;
+  }
+
+  /* Use clock bit and cursor bits to work out size */
+  if (VideoULA_ControlReg & 0x80)
+    CurSize = CurSizes[(VideoULA_ControlReg & 0x70) >> 4] * 8;
+  else CurSize = 2 * 8; /* Mode 7 */
+
+  if (VideoState.IsTeletext) {
+    ScrAddr =
+      CRTC_ScreenStartLow +
+      ((((CRTC_ScreenStartHigh ^ 0x20) + 0x74) & 0xff) << 8);
+    CurAddr =
+      CRTC_CursorPosLow + ((((CRTC_CursorPosHigh ^ 0x20) + 0x74) & 0xff) << 8);
+
+    CurStart = Math.floor((CRTC_CursorStart & 0x1f) / 2);
+    CurEnd = CRTC_CursorEnd;
+    CurSize -= 4;
+  } else {
+    ScrAddr = CRTC_ScreenStartLow + (CRTC_ScreenStartHigh << 8);
+    CurAddr = CRTC_CursorPosLow + (CRTC_CursorPosHigh << 8);
+
+    CurStart = CRTC_CursorStart & 0x1f;
+    CurEnd = CRTC_CursorEnd;
+  }
+
+  RelAddr = CurAddr - ScrAddr;
+  if (RelAddr < 0 || CRTC_HorizontalDisplayed == 0) return;
+
+  /* Work out char positions */
+  CurX = RelAddr % CRTC_HorizontalDisplayed;
+
+  /* Convert to pixel positions */
+  if (VideoState.IsTeletext) {
+    CurX = CurX * 12;
+    CurY = Math.floor(RelAddr / CRTC_HorizontalDisplayed) * 20 + 9;
+  } else {
+    CurX = CurX * HSyncModifier;
+  }
+
+  /* Limit cursor size */ // This should be 11, not 9 - Richard Gellman
+  if (CurEnd > 11) CurEnd = 11;
+
+  if (CurX + CurSize >= 640) CurSize = 640 - CurX;
+
+  CurX += ((CRTC_InterlaceAndDelay & 0xc0) >> 6) * HSyncModifier;
+
+  if (VideoState.IsTeletext) {
+    CurX -= 2 * HSyncModifier;
+  }
+
+  if (CurSize > 0) {
+    for (
+      let y = CurStart;
+      y <= CurEnd && y <= CRTC_ScanLinesPerChar && CurY + y < 500;
+      ++y
+    ) {
+      if (CurY + y >= 0) {
+        doInvHorizLine(7, CurY + y, CurX, CurSize);
+      }
+    }
+  }
+}
+
 type VideoOverrides = {
   CRTC_HorizontalTotal: number;
   CRTC_HorizontalDisplayed: number;
@@ -1147,8 +1228,12 @@ type VideoOverrides = {
   CRTC_VerticalSyncPos: number;
   CRTC_InterlaceAndDelay: number;
   CRTC_ScanLinesPerChar: number;
+  CRTC_CursorStart: number;
+  CRTC_CursorEnd: number;
   CRTC_ScreenStartHigh: number;
   CRTC_ScreenStartLow: number;
+  CRTC_CursorPosHigh: number;
+  CRTC_CursorPosLow: number;
   VideoULA_ControlReg: number;
   VideoULA_Palette: number[];
 };
@@ -1164,8 +1249,12 @@ export function tempVideoOverride(videoOverrides: VideoOverrides) {
     CRTC_VerticalSyncPos,
     CRTC_InterlaceAndDelay,
     CRTC_ScanLinesPerChar,
+    CRTC_CursorStart,
+    CRTC_CursorEnd,
     CRTC_ScreenStartHigh,
     CRTC_ScreenStartLow,
+    CRTC_CursorPosHigh,
+    CRTC_CursorPosLow,
   } = videoOverrides);
 
   VideoULAWrite(0, videoOverrides.VideoULA_ControlReg);

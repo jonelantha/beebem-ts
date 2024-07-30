@@ -51,8 +51,12 @@ async function run() {
     CRTC_VerticalSyncPos: parseInt(params.get("CRTC_VerticalSyncPos")!, 16),
     CRTC_InterlaceAndDelay: parseInt(params.get("CRTC_InterlaceAndDelay")!, 16),
     CRTC_ScanLinesPerChar: parseInt(params.get("CRTC_ScanLinesPerChar")!, 16),
+    CRTC_CursorStart: parseInt(params.get("CRTC_CursorStart")!, 16),
+    CRTC_CursorEnd: parseInt(params.get("CRTC_CursorEnd")!, 16),
     CRTC_ScreenStartHigh: parseInt(params.get("CRTC_ScreenStartHigh")!, 16),
     CRTC_ScreenStartLow: parseInt(params.get("CRTC_ScreenStartLow")!, 16),
+    CRTC_CursorPosHigh: parseInt(params.get("CRTC_CursorPosHigh")!, 16),
+    CRTC_CursorPosLow: parseInt(params.get("CRTC_CursorPosLow")!, 16),
     VideoULA_ControlReg: parseInt(params.get("VideoULA_ControlReg")!, 16),
     VideoULA_Palette: params
       .get("VideoULA_Palette")!

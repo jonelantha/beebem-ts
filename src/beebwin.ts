@@ -77,6 +77,23 @@ export function doHorizLine(
   screenBuffer.fill(colPalette[Colour], d, d + width);
 }
 
+export function doInvHorizLine(
+  Colour: number,
+  y: number,
+  sx: number,
+  width: number,
+) {
+  if (getTeletextEnabled()) y /= getTeletextStyle();
+  const d = y * 800 + sx + getScreenAdjust() + (getTeletextEnabled() ? 36 : 0);
+  if (d + width > 500 * 800) return;
+  if (d < 0) return;
+  for (let n = 0; n < width; n++) {
+    const current = screenBuffer[d + n];
+    const col = colPalette.indexOf(current);
+    screenBuffer[d + n] = colPalette[col ^ Colour];
+  }
+}
+
 // video helper
 
 export function writeSixteenUChars(
