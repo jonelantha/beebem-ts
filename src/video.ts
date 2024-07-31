@@ -34,6 +34,7 @@ import {
   doInvHorizLine,
   EightUChars,
   writeEightUChars,
+  StartOfFrame,
 } from "./beebwin";
 
 export const drawWidth = 800;
@@ -174,8 +175,8 @@ let CursorFieldCount = 32;
 let CursorOnState = true;
 let Mode7FlashTrigger = MODE7ONFIELDS;
 
-// /* If 1 then refresh on every display, else refresh every n'th display */
-// int Video_RefreshFrequency=1;
+/* If 1 then refresh on every display, else refresh every n'th display */
+const Video_RefreshFrequency = 1;
 
 /* The number of the current frame - starts at Video_RefreshFrequency - at 0 actually refresh */
 let FrameNum = 0;
@@ -640,7 +641,7 @@ function VideoStartOfFrame() {
   if (VideoState.IsNewTVFrame) {
     // RTW - only calibrate timing once per frame
     VideoState.IsNewTVFrame = false;
-    //FrameNum = mainWin->StartOfFrame();
+    FrameNum = StartOfFrame();
 
     CursorFieldCount--;
     Mode7FlashTrigger--;
@@ -1265,7 +1266,7 @@ export function VideoInit() {
   //SetTrigger(99,VideoTriggerCount); /* Give time for OS to set mode up before doing anything silly */
   FastTable_Valid = false;
 
-  //FrameNum=Video_RefreshFrequency;
+  FrameNum = Video_RefreshFrequency;
   VideoState.PixmapLine = 0;
   VideoState.FirstPixmapLine = -1;
   VideoState.PreviousFirstPixmapLine = 0;
@@ -1273,7 +1274,7 @@ export function VideoInit() {
   VideoState.PreviousLastPixmapLine = 256;
   VideoState.IsNewTVFrame = false;
   CurY = -1;
-  AdjustVideo(); // !!! temp
+  //AdjustVideo();
   //  crtclog=fopen("/crtc.log","wb");
 }
 

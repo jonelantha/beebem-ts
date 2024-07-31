@@ -181,3 +181,94 @@ export function updateLines(startLine: number, nlines: number) {
     finalHeight,
   );
 }
+
+/****************************************************************************/
+export function StartOfFrame() {
+  let FrameNum = 1;
+
+  if (UpdateTiming()) FrameNum = 0;
+
+  return FrameNum;
+}
+
+/****************************************************************************/
+function UpdateTiming() {
+  let UpdateScreen = false;
+
+  UpdateScreen = true; // !!! temp
+
+  // DWORD TickCount = GetTickCount();
+
+  // /* Don't do anything if this is the first call or there has
+  //    been a long pause due to menu commands, or when something
+  //    wraps. */
+  // if (m_LastTickCount == 0 ||
+  // 	TickCount < m_LastTickCount ||
+  // 	(TickCount - m_LastTickCount) > 1000 ||
+  // 	TotalCycles < m_LastTotalCycles)
+  // {
+  // 	ResetTiming();
+  // 	return true;
+  // }
+
+  // /* Update stats every second */
+  // if (TickCount >= m_LastStatsTickCount + 1000)
+  // {
+  // 	m_FramesPerSecond = m_ScreenRefreshCount;
+  // 	m_ScreenRefreshCount = 0;
+  // 	m_RelativeSpeed = ((TotalCycles - m_LastStatsTotalCycles) / 2000.0) /
+  // 							(TickCount - m_LastStatsTickCount);
+  // 	m_LastStatsTotalCycles = TotalCycles;
+  // 	m_LastStatsTickCount += 1000;
+  // 	DisplayTiming();
+  // }
+
+  // // Now we work out if BeebEm is running too fast or not
+  // DWORD Ticks = TickCount - m_TickBase;
+  // int nCycles = (int)((double)(TotalCycles - m_CycleBase) / REAL_TIME_TARGET);
+
+  // if (Ticks <= (DWORD)(nCycles / 2000))
+  // {
+  // 	// Need to slow down, show frame (max 50fps though)
+  // 	// and sleep a bit
+  // 	if (TickCount >= m_LastFPSCount + 20)
+  // 	{
+  // 		UpdateScreen = true;
+  // 		m_LastFPSCount += 20;
+  // 	}
+  // 	else
+  // 	{
+  // 		UpdateScreen = false;
+  // 	}
+
+  // 	DWORD SpareTicks = (DWORD)(nCycles / 2000) - Ticks;
+  // 	Sleep(SpareTicks);
+  // 	m_MinFrameCount = 0;
+  // }
+  // else
+  // {
+  // 	// Need to speed up, skip a frame
+  // 	UpdateScreen = false;
+
+  // 	// Make sure we show at least one in 100 frames
+  // 	++m_MinFrameCount;
+  // 	if (m_MinFrameCount >= 100)
+  // 	{
+  // 		UpdateScreen = true;
+  // 		m_MinFrameCount = 0;
+  // 	}
+  // }
+
+  // /* Move counter bases forward */
+  // int CyclesPerSec = (int)(2000000.0 * REAL_TIME_TARGET);
+  // while ((TickCount - m_TickBase) > 1000 && (TotalCycles - m_CycleBase) > CyclesPerSec)
+  // {
+  // 	m_TickBase += 1000;
+  // 	m_CycleBase += CyclesPerSec;
+  // }
+
+  // m_LastTickCount = TickCount;
+  // m_LastTotalCycles = TotalCycles;
+
+  return UpdateScreen;
+}
