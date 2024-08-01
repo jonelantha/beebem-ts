@@ -28,15 +28,14 @@ Boston, MA  02110-1301, USA.
 
 import { getIC32State } from "./sysvia";
 
-let mem: Uint8Array;
+const WholeRam = new Uint8Array(65536);
+export const getWholeRam = () => WholeRam;
 
 export async function tempLoadMemSnapshot(file: string) {
   const res = await fetch(file);
   const buffer = await res.arrayBuffer();
-  mem = new Uint8Array(buffer);
+  WholeRam.set(new Uint8Array(buffer));
 }
-
-export const getMem = () => mem;
 
 /*----------------------------------------------------------------------------*/
 /* Perform hardware address wrap around */

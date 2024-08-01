@@ -22,7 +22,11 @@ Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 Boston, MA  02110-1301, USA.
 ****************************************************************/
 
-import { BeebMemPtrWithWrap, BeebMemPtrWithWrapMode7, getMem } from "./beebmem";
+import {
+  BeebMemPtrWithWrap,
+  BeebMemPtrWithWrapMode7,
+  getWholeRam,
+} from "./beebmem";
 import { getScreen, StartOfFrame } from "./beebwin";
 import { bufferWidth, updateLines } from "./beebwindx";
 import {
@@ -31,8 +35,8 @@ import {
   EightUChars,
   GetLinePtr,
   SixteenUChars,
-  writeEightUChars,
-  writeSixteenUChars,
+  write8UChars,
+  write16UChars,
 } from "./beebwinh";
 
 // from header
@@ -698,7 +702,7 @@ function VideoStartOfFrame() {
 /*--------------------------------------------------------------------------*/
 /* Scanline processing for modes with fast 6845 clock - i.e. narrow pixels  */
 function LowLevelDoScanLineNarrow() {
-  const mem = getMem();
+  const WholeRam = getWholeRam();
   let BytesToGo = CRTC_HorizontalDisplayed;
   let vidPtr = GetLinePtr(VideoState.PixmapLine);
 
@@ -710,17 +714,17 @@ function LowLevelDoScanLineNarrow() {
      except every 4 entries */
   BytesToGo /= 4;
   for (; BytesToGo; CurrentPtr += 32, BytesToGo--) {
-    vidPtr = writeEightUChars(vidPtr, FastTable[mem[CurrentPtr]]);
-    vidPtr = writeEightUChars(vidPtr, FastTable[mem[CurrentPtr + 8]]);
-    vidPtr = writeEightUChars(vidPtr, FastTable[mem[CurrentPtr + 16]]);
-    vidPtr = writeEightUChars(vidPtr, FastTable[mem[CurrentPtr + 24]]);
+    vidPtr = write8UChars(vidPtr, FastTable[WholeRam[CurrentPtr]]);
+    vidPtr = write8UChars(vidPtr, FastTable[WholeRam[CurrentPtr + 8]]);
+    vidPtr = write8UChars(vidPtr, FastTable[WholeRam[CurrentPtr + 16]]);
+    vidPtr = write8UChars(vidPtr, FastTable[WholeRam[CurrentPtr + 24]]);
   }
 }
 
 /*-----------------------------------------------------------------------------*/
 /* Scanline processing for the low clock rate modes                            */
 function LowLevelDoScanLineWide() {
-  const mem = getMem();
+  const WholeRam = getWholeRam();
   let BytesToGo = CRTC_HorizontalDisplayed;
 
   let vidPtr = GetLinePtr(VideoState.PixmapLine);
@@ -734,17 +738,17 @@ function LowLevelDoScanLineWide() {
   BytesToGo /= 4;
 
   for (; BytesToGo; CurrentPtr += 32, BytesToGo--) {
-    vidPtr = writeSixteenUChars(vidPtr, FastTableDWidth[mem[CurrentPtr]]);
-    vidPtr = writeSixteenUChars(vidPtr, FastTableDWidth[mem[CurrentPtr + 8]]);
-    vidPtr = writeSixteenUChars(vidPtr, FastTableDWidth[mem[CurrentPtr + 16]]);
-    vidPtr = writeSixteenUChars(vidPtr, FastTableDWidth[mem[CurrentPtr + 24]]);
+    vidPtr = write16UChars(vidPtr, FastTableDWidth[WholeRam[CurrentPtr]]);
+    vidPtr = write16UChars(vidPtr, FastTableDWidth[WholeRam[CurrentPtr + 8]]);
+    vidPtr = write16UChars(vidPtr, FastTableDWidth[WholeRam[CurrentPtr + 16]]);
+    vidPtr = write16UChars(vidPtr, FastTableDWidth[WholeRam[CurrentPtr + 24]]);
   }
 }
 
 /*-------------------------------------------------------------------------------------------------------------*/
 /* Do all the pixel rows for one row of teletext characters                                                    */
 function DoMode7Row() {
-  const mem = getMem();
+  const WholeRam = getWholeRam();
   const CurrentPtr = VideoState.DataPtr;
   let CurrentChar: number;
   let byte: number;
@@ -791,7 +795,7 @@ function DoMode7Row() {
     HoldGraphChar = NextHoldGraphChar;
     HoldSeparated = NextHoldSeparated;
     Graphics = NextGraphics;
-    byte = mem[CurrentPtr + CurrentChar];
+    byte = WholeRam[CurrentPtr + CurrentChar];
     if (byte < 32) byte += 128; // fix for naughty programs that use 7-bit control codes - Richard Gellman
     if (byte & 32 && Graphics) {
       NextHoldGraphChar = byte;

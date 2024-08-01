@@ -102,7 +102,7 @@ export function GetLinePtr(y: number) {
 
 // video helper
 
-export function writeEightUChars(vidPtr: number, eightUChars: EightUChars) {
+export function write8UChars(vidPtr: number, eightUChars: EightUChars) {
   const screen = getScreen();
 
   for (let i = 0; i < 8; i++) {
@@ -111,10 +111,7 @@ export function writeEightUChars(vidPtr: number, eightUChars: EightUChars) {
   return vidPtr;
 }
 
-export function writeSixteenUChars(
-  vidPtr: number,
-  sixteenUChars: SixteenUChars,
-) {
+export function write16UChars(vidPtr: number, sixteenUChars: SixteenUChars) {
   const screen = getScreen();
 
   for (let i = 0; i < 16; i++) {
