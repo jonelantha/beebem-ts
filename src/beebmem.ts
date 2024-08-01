@@ -30,7 +30,7 @@ import { getIC32State } from "./sysvia";
 
 let mem: Uint8Array;
 
-export async function initMem(file: string) {
+export async function tempLoadMemSnapshot(file: string) {
   const res = await fetch(file);
   const buffer = await res.arrayBuffer();
   mem = new Uint8Array(buffer);
@@ -134,4 +134,18 @@ export function BeebMemPtrWithWrapMode7(Address: number, Length: number) {
   // }
 
   // return tmpBuf;
+}
+
+/*----------------------------------------------------------------------------*/
+export function BeebMemInit(_LoadRoms: boolean) {
+  // Reset everything
+  // memset(WholeRam,0,0x8000);
+  // if (LoadRoms) {
+  //   // This shouldn't be required for sideways RAM.
+  //   DebugInitMemoryMaps();
+  //   BeebReadRoms(); // Only load roms on start
+  // }
+  // /* Put first ROM in */
+  // memcpy(WholeRam+0x8000,Roms[0xf],0x4000);
+  // PagedRomReg=0xf;
 }

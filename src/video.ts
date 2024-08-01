@@ -23,22 +23,17 @@ Boston, MA  02110-1301, USA.
 ****************************************************************/
 
 import { BeebMemPtrWithWrap, BeebMemPtrWithWrapMode7, getMem } from "./beebmem";
+import { getScreen, StartOfFrame } from "./beebwin";
+import { bufferWidth, updateLines } from "./beebwindx";
 import {
   doHorizLine,
-  GetLinePtr,
-  getScreenBuffer,
-  SixteenUChars,
-  updateLines,
-  writeSixteenUChars,
-  tempUpdate,
   doInvHorizLine,
   EightUChars,
+  GetLinePtr,
+  SixteenUChars,
   writeEightUChars,
-  StartOfFrame,
-} from "./beebwin";
-
-export const drawWidth = 800;
-export const drawHeight = 512;
+  writeSixteenUChars,
+} from "./beebwinh";
 
 // from header
 
@@ -185,14 +180,14 @@ let FrameNum = 0;
 // Build enhanced mode 7 font
 
 function tempDrawChar(fontType: number, char: number, x: number, y: number) {
-  const screenBuffer = getScreenBuffer();
+  const screen = getScreen();
   for (let charY = 0; charY < 20; charY++) {
     const scanline = Mode7Font[Mode7FontIndex(fontType, char, charY)];
 
     for (let charX = 0; charX < 16; charX++) {
       const bit = 1 << (16 - charX);
-      screenBuffer[charX + x * 16 + drawWidth * (charY + y * 20)] =
-        scanline & bit ? 0xff000000 : 0;
+      screen[charX + x * 16 + bufferWidth * (charY + y * 20)] =
+        scanline & bit ? 7 : 0;
     }
   }
 }
@@ -209,7 +204,7 @@ function tempPlotCharset(fontType: number) {
       y++;
     }
   }
-  tempUpdate();
+  updateLines(0, 500 / TeletextStyle);
 }
 
 export async function BuildMode7Font(filename: string) {
@@ -1020,7 +1015,7 @@ function LowLevelDoScanLine() {
 ///
 
 export function VideoDoScanLine() {
-  const screenBuffer = getScreenBuffer();
+  const screen = getScreen();
   if (VideoState.IsTeletext) {
     if (VideoState.DoCA1Int) {
       //SysVIATriggerCA1Int(0);
@@ -1134,8 +1129,8 @@ export function VideoDoScanLine() {
 
     /* Clear the scan line */
     if (!FrameNum) {
-      screenBuffer.fill(
-        0xff000000,
+      screen.fill(
+        0,
         GetLinePtr(VideoState.PixmapLine),
         GetLinePtr(VideoState.PixmapLine) + 800,
       );

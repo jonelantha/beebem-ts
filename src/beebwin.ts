@@ -29,157 +29,59 @@ Boston, MA  02110-1301, USA.
 // 28/12/2004: Econet added Rob O'Donnell. robert@irrelevant.com.
 // 26/12/2011: Added IDE Drive to Hardware options, JGH
 
-import {
-  drawHeight,
-  drawWidth,
-  getActualScreenWidth,
-  getTeletextEnabled,
-  getScreenAdjust,
-  MAX_VIDEO_SCAN_LINES,
-  getTeletextStyle,
-} from "./video";
+import { BeebMemInit } from "./beebmem";
+import { bufferHeight, bufferWidth, InitSurfaces } from "./beebwindx";
+import { BuildMode7Font, VideoInit } from "./video";
 
-// from header
+export const primaryWidth = 640;
+export const primaryHeight = 480;
 
-export type EightUChars = [
-  a: number,
-  b: number,
-  c: number,
-  d: number,
-  e: number,
-  f: number,
-  g: number,
-  h: number,
-];
+let screen: Uint8Array;
 
-export type SixteenUChars = [
-  a: number,
-  b: number,
-  c: number,
-  d: number,
-  e: number,
-  f: number,
-  g: number,
-  h: number,
-  i: number,
-  j: number,
-  k: number,
-  l: number,
-  m: number,
-  n: number,
-  o: number,
-  p: number,
-];
+export const getScreen = () => screen;
 
-export function GetLinePtr(y: number) {
-  return Math.min(y * 800 + getScreenAdjust(), MAX_VIDEO_SCAN_LINES * 800);
+export const getPrimaryContext = () =>
+  (document.getElementById("primaryCanvas") as HTMLCanvasElement).getContext(
+    "2d",
+  )!;
+
+/****************************************************************************/
+export async function Initialise() {
+  CreateBeebWindow();
+  CreateBitmap();
+
+  ApplyPrefs();
+
+  await BuildMode7Font("/teletext.fnt");
 }
 
-export function doHorizLine(
-  Colour: number,
-  y: number,
-  sx: number,
-  width: number,
-) {
-  if (getTeletextEnabled()) y /= getTeletextStyle();
-  const d = y * 800 + sx + getScreenAdjust() + (getTeletextEnabled() ? 36 : 0);
-  if (d + width > 500 * 800) return;
-  if (d < 0) return;
-  screenBuffer.fill(colPalette[Colour], d, d + width);
+/****************************************************************************/
+function ApplyPrefs() {
+  InitSurfaces();
+
+  ResetBeebSystem(true);
 }
 
-export function doInvHorizLine(
-  Colour: number,
-  y: number,
-  sx: number,
-  width: number,
-) {
-  if (getTeletextEnabled()) y /= getTeletextStyle();
-  const d = y * 800 + sx + getScreenAdjust() + (getTeletextEnabled() ? 36 : 0);
-  if (d + width > 500 * 800) return;
-  if (d < 0) return;
-  for (let n = 0; n < width; n++) {
-    const current = screenBuffer[d + n];
-    const col = colPalette.indexOf(current);
-    screenBuffer[d + n] = colPalette[col ^ Colour];
-  }
+/****************************************************************************/
+
+function ResetBeebSystem(LoadRoms: boolean) {
+  BeebMemInit(LoadRoms);
+
+  VideoInit();
 }
 
-// video helper
-
-export function writeEightUChars(vidPtr: number, eightUChars: EightUChars) {
-  for (let i = 0; i < 8; i++) {
-    screenBuffer[vidPtr++] = colPalette[eightUChars[i]];
-  }
-  return vidPtr;
+/****************************************************************************/
+export function CreateBitmap() {
+  screen = new Uint8Array(bufferWidth * bufferHeight);
 }
 
-export function writeSixteenUChars(
-  vidPtr: number,
-  sixteenUChars: SixteenUChars,
-) {
-  for (let i = 0; i < 16; i++) {
-    screenBuffer[vidPtr++] = colPalette[sixteenUChars[i]];
-  }
-  return vidPtr;
-}
-
-// main
-
-let imageData: ImageData;
-let screenBuffer: Uint32Array;
-
-export function initScreen() {
-  const drawCanvas = document.getElementById("drawCanvas") as HTMLCanvasElement;
-  drawCanvas.width = drawWidth;
-  drawCanvas.height = drawHeight;
-
-  imageData = new ImageData(drawWidth, drawHeight);
-  screenBuffer = new Uint32Array(imageData.data.buffer);
-}
-
-export const colPalette = [
-  0xff000000, 0xff0000ff, 0xff00ff00, 0xff00ffff, 0xffff0000, 0xffff00ff,
-  0xffffff00, 0xffffffff,
-];
-
-export const getScreenBuffer = () => screenBuffer;
-
-export function tempUpdate() {
-  const drawCanvas = document.getElementById("drawCanvas") as HTMLCanvasElement;
-
-  const context = drawCanvas.getContext("2d")!;
-  context.putImageData(imageData, 0, 0, 0, 0, drawWidth, drawHeight);
-}
-
-export function updateLines(startLine: number, nlines: number) {
-  const drawCanvas = document.getElementById("drawCanvas") as HTMLCanvasElement;
-
-  const context = drawCanvas.getContext("2d")!;
-  context.putImageData(imageData, 0, 0, 0, 0, drawWidth, drawHeight);
-
-  const finalWidth = 640;
-  const finalHeight = 512;
-
-  const finalCanvas = document.getElementById("canvas") as HTMLCanvasElement;
-  finalCanvas.width = finalWidth;
-  finalCanvas.height = finalHeight;
-
-  const TeletextLines = 500 / getTeletextStyle();
-
-  const finalContext = finalCanvas.getContext("2d")!;
-
-  finalContext.drawImage(
-    drawCanvas,
-    0,
-    startLine,
-    getTeletextEnabled() ? 552 : getActualScreenWidth(),
-    getTeletextEnabled() ? TeletextLines : nlines,
-    0,
-    0,
-    finalWidth,
-    finalHeight,
-  );
+/****************************************************************************/
+export function CreateBeebWindow() {
+  const primaryCanvas = document.getElementById(
+    "primaryCanvas",
+  ) as HTMLCanvasElement;
+  primaryCanvas.width = primaryWidth;
+  primaryCanvas.height = primaryHeight;
 }
 
 /****************************************************************************/
