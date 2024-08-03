@@ -28,5 +28,5 @@ keyboard emulation - David Alan Gilbert 30/10/94 */
 /* State of the 8bit latch IC32 - bit 0 is WE for sound gen, B1 is read
    select on speech proc, B2 is write select on speech proc, b4,b5 select
    screen start address offset , b6 is CAPS lock, b7 is shift lock */
-const IC32State = 0x97; // !!! overridden
+const IC32State = 0x00;
 export const getIC32State = () => IC32State;
