@@ -22,6 +22,7 @@ Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 Boston, MA  02110-1301, USA.
 ****************************************************************/
 
+import { getTotalCycles, IncTrigger, SetTrigger } from "./6502core";
 import {
   BeebMemPtrWithWrap,
   BeebMemPtrWithWrapMode7,
@@ -40,6 +41,9 @@ import {
 } from "./beebwinh";
 
 // from header
+
+export const VideoPoll = (_ncycles: number) =>
+  VideoTriggerCount <= getTotalCycles() ? VideoDoScanLine() : undefined;
 
 export const MAX_VIDEO_SCAN_LINES = 312;
 
@@ -148,7 +152,7 @@ let VideoState: VideoState = {
   DoCA1Int: false,
 };
 
-//   int VideoTriggerCount=9999; /* Number of cycles before next scanline service */
+let VideoTriggerCount = 9999; /* Number of cycles before next scanline service */
 
 // First subscript is graphics flag (1 for graphics, 2 for separated graphics),
 // next is character, then scanline
@@ -636,11 +640,16 @@ function DoFastTable() {
 //#define BEEB_DOTIME_SAMPLESIZE 50
 
 function VideoStartOfFrame() {
+  let sleepTime: undefined | number = undefined;
   /* FrameNum is determined by the window handler */
   if (VideoState.IsNewTVFrame) {
     // RTW - only calibrate timing once per frame
     VideoState.IsNewTVFrame = false;
-    FrameNum = StartOfFrame();
+    const res = StartOfFrame();
+    FrameNum = res.FrameNum;
+    sleepTime = res.sleepTime;
+
+    // Check for anything time critical [x]
 
     CursorFieldCount--;
     Mode7FlashTrigger--;
@@ -690,13 +699,23 @@ function VideoStartOfFrame() {
     }
   }
 
-  // const int IL_Multiplier = (CRTC_InterlaceAndDelay & 1) ? 2 : 1;
+  const IL_Multiplier = CRTC_InterlaceAndDelay & 1 ? 2 : 1;
 
-  // if (VideoState.InterlaceFrame) {
-  //   IncTrigger((IL_Multiplier*(CRTC_HorizontalTotal+1)*((VideoULA_ControlReg & 16)?1:2)),VideoTriggerCount); /* Number of 2MHz cycles until another scanline needs doing */
-  // } else {
-  //   IncTrigger(((CRTC_HorizontalTotal+1)*((VideoULA_ControlReg & 16)?1:2)),VideoTriggerCount); /* Number of 2MHz cycles until another scanline needs doing */
-  // }
+  if (VideoState.InterlaceFrame) {
+    VideoTriggerCount = IncTrigger(
+      IL_Multiplier *
+        (CRTC_HorizontalTotal + 1) *
+        (VideoULA_ControlReg & 16 ? 1 : 2),
+      VideoTriggerCount,
+    ); /* Number of 2MHz cycles until another scanline needs doing */
+  } else {
+    VideoTriggerCount = IncTrigger(
+      (CRTC_HorizontalTotal + 1) * (VideoULA_ControlReg & 16 ? 1 : 2),
+      VideoTriggerCount,
+    ); /* Number of 2MHz cycles until another scanline needs doing */
+  }
+
+  return sleepTime;
 }
 
 /*--------------------------------------------------------------------------*/
@@ -1019,6 +1038,7 @@ function LowLevelDoScanLine() {
 ///
 
 export function VideoDoScanLine() {
+  let sleepTime: number | undefined;
   const screen = getScreen();
   if (VideoState.IsTeletext) {
     if (VideoState.DoCA1Int) {
@@ -1089,16 +1109,17 @@ export function VideoDoScanLine() {
         updateLines(0, 500 / TeletextStyle);
       }
       VideoState.IsNewTVFrame = true;
-      VideoStartOfFrame();
+      sleepTime = VideoStartOfFrame();
       VideoState.PreviousLastPixmapLine = VideoState.PixmapLine;
       VideoState.PixmapLine = 0;
       //SysVIATriggerCA1Int(1);
       VideoState.DoCA1Int = true;
-
-      return false; //
     } else {
       // RTW- set timer till the next scanline update (this is now nice and simple)
-      //IncTrigger((CRTC_HorizontalTotal+1)*((VideoULA_ControlReg & 16)?1:2),VideoTriggerCount);
+      VideoTriggerCount = IncTrigger(
+        (CRTC_HorizontalTotal + 1) * (VideoULA_ControlReg & 16 ? 1 : 2),
+        VideoTriggerCount,
+      );
     }
   } else {
     /* Non teletext. */
@@ -1220,21 +1241,21 @@ export function VideoDoScanLine() {
 
         updateLines(startLine, 256);
       }
-      VideoStartOfFrame();
+      sleepTime = VideoStartOfFrame();
       AdjustVideo();
-      return false; //
     } else {
-      // IncTrigger(
-      //   (CRTC_HorizontalTotal + 1) * (VideoULA_ControlReg & 16 ? 1 : 2),
-      //   VideoTriggerCount,
-      // );
+      VideoTriggerCount = IncTrigger(
+        (CRTC_HorizontalTotal + 1) * (VideoULA_ControlReg & 16 ? 1 : 2),
+        VideoTriggerCount,
+      );
     }
   }
-  return true; //
+  return sleepTime;
 }
 
 /*-------------------------------------------------------------------------------------------------------------*/
 function AdjustVideo() {
+  // Check for anything time critical [x]
   ActualScreenWidth = CRTC_HorizontalDisplayed * HSyncModifier;
 
   if (ActualScreenWidth > 800) {
@@ -1262,7 +1283,7 @@ export function VideoInit() {
   VideoStartOfFrame();
 
   VideoState.DataPtr = BeebMemPtrWithWrap(0x3000, 640);
-  //SetTrigger(99,VideoTriggerCount); /* Give time for OS to set mode up before doing anything silly */
+  VideoTriggerCount = SetTrigger(99); // Give time for OS to set mode up before doing anything silly
   FastTable_Valid = false;
 
   FrameNum = Video_RefreshFrequency;

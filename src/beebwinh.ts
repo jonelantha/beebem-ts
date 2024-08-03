@@ -34,6 +34,8 @@ import {
   getTeletextStyle,
 } from "./video";
 
+export const REAL_TIME_TARGET = 1.0;
+
 export type EightUChars = [
   a: number,
   b: number,

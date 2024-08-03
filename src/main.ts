@@ -20,9 +20,10 @@ Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 Boston, MA  02110-1301, USA.
 ****************************************************************/
 
-import { tempVideoOverride, VideoDoScanLine } from "./video";
+import { tempVideoOverride } from "./video";
 import { tempLoadMemSnapshot } from "./beebmem";
 import { Initialise } from "./beebwin";
+import { Exec6502Instruction } from "./6502core";
 
 import "./style.css";
 
@@ -65,9 +66,9 @@ await Initialise();
 
 await tempLoadMemSnapshot(memFile);
 
-let frameCount = 0;
-function doFrame() {
-  while (VideoDoScanLine()) {}
-  if (frameCount++ < 10) requestAnimationFrame(doFrame);
+const start = performance.now();
+
+while (performance.now() - start < 100) {
+  const sleepTime = Exec6502Instruction();
+  if (sleepTime) await new Promise<void>(res => setTimeout(res, sleepTime));
 }
-doFrame();

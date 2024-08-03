@@ -29,8 +29,10 @@ Boston, MA  02110-1301, USA.
 // 28/12/2004: Econet added Rob O'Donnell. robert@irrelevant.com.
 // 26/12/2011: Added IDE Drive to Hardware options, JGH
 
+import { getTotalCycles } from "./6502core";
 import { BeebMemInit } from "./beebmem";
 import { bufferHeight, bufferWidth, InitSurfaces } from "./beebwindx";
+import { REAL_TIME_TARGET } from "./beebwinh";
 import { BuildMode7Font, VideoInit } from "./video";
 
 export const primaryWidth = 640;
@@ -47,6 +49,8 @@ export const getPrimaryContext = () =>
 
 /****************************************************************************/
 export async function Initialise() {
+  ResetTiming();
+
   CreateBeebWindow();
   CreateBitmap();
 
@@ -88,32 +92,54 @@ export function CreateBeebWindow() {
 export function StartOfFrame() {
   let FrameNum = 1;
 
-  if (UpdateTiming()) FrameNum = 0;
+  const { sleepTime, UpdateScreen } = UpdateTiming();
+  if (UpdateScreen) FrameNum = 0;
 
-  return FrameNum;
+  return { FrameNum, sleepTime };
+}
+
+let m_LastTickCount = 0;
+let m_LastTotalCycles: number;
+let m_TickBase: number;
+let m_CycleBase: number;
+let m_LastFPSCount: number;
+let m_MinFrameCount: number;
+
+/****************************************************************************/
+function ResetTiming() {
+  m_LastTickCount = performance.now(); //GetTickCount();
+  // m_LastStatsTickCount = m_LastTickCount;
+  m_LastTotalCycles = getTotalCycles();
+  // m_LastStatsTotalCycles = TotalCycles;
+  m_TickBase = m_LastTickCount;
+  m_CycleBase = getTotalCycles();
+  m_MinFrameCount = 0;
+  m_LastFPSCount = m_LastTickCount;
+  // m_ScreenRefreshCount = 0;
 }
 
 /****************************************************************************/
-function UpdateTiming() {
+function UpdateTiming(): { UpdateScreen: boolean; sleepTime?: number } {
   let UpdateScreen = false;
+  let sleepTime: number | undefined;
 
-  UpdateScreen = true; // !!! temp
+  const TotalCycles = getTotalCycles();
+  const TickCount = performance.now(); //GetTickCount();
 
-  // DWORD TickCount = GetTickCount();
+  /* Don't do anything if this is the first call or there has
+     been a long pause due to menu commands, or when something
+     wraps. */
+  if (
+    m_LastTickCount == 0 ||
+    TickCount < m_LastTickCount ||
+    TickCount - m_LastTickCount > 1000 ||
+    TotalCycles < m_LastTotalCycles
+  ) {
+    ResetTiming();
+    return { UpdateScreen: true, sleepTime: undefined };
+  }
 
-  // /* Don't do anything if this is the first call or there has
-  //    been a long pause due to menu commands, or when something
-  //    wraps. */
-  // if (m_LastTickCount == 0 ||
-  // 	TickCount < m_LastTickCount ||
-  // 	(TickCount - m_LastTickCount) > 1000 ||
-  // 	TotalCycles < m_LastTotalCycles)
-  // {
-  // 	ResetTiming();
-  // 	return true;
-  // }
-
-  // /* Update stats every second */
+  /* Update stats every second */
   // if (TickCount >= m_LastStatsTickCount + 1000)
   // {
   // 	m_FramesPerSecond = m_ScreenRefreshCount;
@@ -125,52 +151,48 @@ function UpdateTiming() {
   // 	DisplayTiming();
   // }
 
-  // // Now we work out if BeebEm is running too fast or not
-  // DWORD Ticks = TickCount - m_TickBase;
-  // int nCycles = (int)((double)(TotalCycles - m_CycleBase) / REAL_TIME_TARGET);
+  // Now we work out if BeebEm is running too fast or not
+  const Ticks = TickCount - m_TickBase;
+  const nCycles = Math.floor((TotalCycles - m_CycleBase) / REAL_TIME_TARGET);
 
-  // if (Ticks <= (DWORD)(nCycles / 2000))
-  // {
-  // 	// Need to slow down, show frame (max 50fps though)
-  // 	// and sleep a bit
-  // 	if (TickCount >= m_LastFPSCount + 20)
-  // 	{
-  // 		UpdateScreen = true;
-  // 		m_LastFPSCount += 20;
-  // 	}
-  // 	else
-  // 	{
-  // 		UpdateScreen = false;
-  // 	}
+  if (Ticks <= nCycles / 2000) {
+    // Need to slow down, show frame (max 50fps though)
+    // and sleep a bit
+    if (TickCount >= m_LastFPSCount + 20) {
+      UpdateScreen = true;
+      m_LastFPSCount += 20;
+    } else {
+      UpdateScreen = false;
+    }
 
-  // 	DWORD SpareTicks = (DWORD)(nCycles / 2000) - Ticks;
-  // 	Sleep(SpareTicks);
-  // 	m_MinFrameCount = 0;
-  // }
-  // else
-  // {
-  // 	// Need to speed up, skip a frame
-  // 	UpdateScreen = false;
+    const SpareTicks = nCycles / 2000 - Ticks;
+    sleepTime = SpareTicks;
+    m_MinFrameCount = 0;
+  } else {
+    // Need to speed up, skip a frame
+    UpdateScreen = false;
+    // Make sure we show at least one in 100 frames
+    ++m_MinFrameCount;
+    if (m_MinFrameCount >= 100) {
+      UpdateScreen = true;
+      m_MinFrameCount = 0;
+    }
+  }
 
-  // 	// Make sure we show at least one in 100 frames
-  // 	++m_MinFrameCount;
-  // 	if (m_MinFrameCount >= 100)
-  // 	{
-  // 		UpdateScreen = true;
-  // 		m_MinFrameCount = 0;
-  // 	}
-  // }
+  // Check for anything time critical [x]
 
-  // /* Move counter bases forward */
-  // int CyclesPerSec = (int)(2000000.0 * REAL_TIME_TARGET);
-  // while ((TickCount - m_TickBase) > 1000 && (TotalCycles - m_CycleBase) > CyclesPerSec)
-  // {
-  // 	m_TickBase += 1000;
-  // 	m_CycleBase += CyclesPerSec;
-  // }
+  /* Move counter bases forward */
+  const CyclesPerSec = Math.floor(2_000_000.0 * REAL_TIME_TARGET);
+  while (
+    TickCount - m_TickBase > 1000 &&
+    TotalCycles - m_CycleBase > CyclesPerSec
+  ) {
+    m_TickBase += 1000;
+    m_CycleBase += CyclesPerSec;
+  }
 
-  // m_LastTickCount = TickCount;
-  // m_LastTotalCycles = TotalCycles;
+  m_LastTickCount = TickCount;
+  m_LastTotalCycles = TotalCycles;
 
-  return UpdateScreen;
+  return { UpdateScreen, sleepTime };
 }
