@@ -23,6 +23,15 @@ Boston, MA  02110-1301, USA.
 import { VideoPoll } from "./video";
 
 // header
+
+const FlagC = 1;
+const FlagZ = 2;
+const FlagI = 4;
+const FlagD = 8;
+const FlagB = 16;
+const FlagV = 64;
+const FlagN = 128;
+
 export const SetTrigger = (after: number) => TotalCycles + after;
 export const IncTrigger = (after: number, trigger: number) => trigger + after;
 
@@ -31,6 +40,11 @@ export const IncTrigger = (after: number, trigger: number) => trigger + after;
 let CurrentInstruction = -1;
 
 let TotalCycles = 0;
+
+let ProgramCounter: number; // int
+let Accumulator: number, XReg: number, YReg: number; // int
+let StackReg: number, PSR: number; // unsigned char
+
 export const getTotalCycles = () => TotalCycles;
 
 // prettier-ignore
@@ -102,6 +116,800 @@ const CyclesToMemWrite = [
    allow fernangling by memory subsystem */
 let Cycles: number; // unsigned int
 
+const ReadPaged = BeebReadMem;
+
+/*----------------------------------------------------------------------------*/
+
+// Correct cycle count for indirection across page boundary
+
+// static INLINE void Carried()
+// {
+// 	if (((CurrentInstruction & 0xf) == 0x1 ||
+// 	     (CurrentInstruction & 0xf) == 0x9 ||
+// 	     (CurrentInstruction & 0xf) == 0xd) &&
+// 	    (CurrentInstruction & 0xf0) != 0x90)
+// 	{
+// 		Cycles++;
+// 	}
+// 	else if (CurrentInstruction == 0x1c ||
+// 	         CurrentInstruction == 0x3c ||
+// 	         CurrentInstruction == 0x5c ||
+// 	         CurrentInstruction == 0x7c ||
+// 	         CurrentInstruction == 0xb3 ||
+// 	         CurrentInstruction == 0xbb ||
+// 	         CurrentInstruction == 0xbc ||
+// 	         CurrentInstruction == 0xbe ||
+// 	         CurrentInstruction == 0xbf ||
+// 	         CurrentInstruction == 0xdc ||
+// 	         CurrentInstruction == 0xfc)
+// 	{
+// 		Cycles++;
+// 	}
+// }
+
+/*----------------------------------------------------------------------------*/
+// void DoIntCheck(void)
+// {
+// 	if (!IntDue)
+// 	{
+// 		IntDue = (intStatus != 0);
+// 		if (!IntDue)
+// 		{
+// 			CyclesToInt = NO_TIMER_INT_DUE;
+// 		}
+// 		else if (CyclesToInt == NO_TIMER_INT_DUE)
+// 		{
+// 			// Non-timer interrupt has occurred
+// 			CyclesToInt = 0;
+// 		}
+// 	}
+// }
+/*----------------------------------------------------------------------------*/
+
+// IO read + write take extra cycle & require sync with 1MHz clock (taken
+// from Model-b - have not seen this documented anywhere)
+
+// void SyncIO(void)
+// {
+// 	if ((TotalCycles+Cycles) & 1)
+// 	{
+// 		Cycles++;
+// 		IOCycles = 1;
+// 		PollVIAs(1);
+// 	}
+// 	else
+// 	{
+// 		IOCycles = 0;
+// 	}
+// }
+
+// void AdjustForIORead(void)
+// {
+// 	Cycles++;
+// 	IOCycles += 1;
+// 	PollVIAs(1);
+// }
+
+// void AdjustForIOWrite(void)
+// {
+// 	Cycles++;
+// 	IOCycles += 1;
+// 	PollVIAs(1);
+// 	DoIntCheck();
+// }
+
+/*----------------------------------------------------------------------------*/
+
+// static void AdvanceCyclesForMemRead()
+// {
+// 	// Advance VIAs to point where mem read happens
+// 	Cycles += CyclesToMemRead[CurrentInstruction];
+// 	PollVIAs(CyclesToMemRead[CurrentInstruction]);
+
+// 	// Check if interrupt should be taken if instruction does
+// 	// a read but not a write (write instructions checked below).
+// 	if (CyclesToMemRead[CurrentInstruction] != 0 &&
+// 		CyclesToMemWrite[CurrentInstruction] == 0)
+// 	{
+// 		DoIntCheck();
+// 	}
+// }
+
+// static void AdvanceCyclesForMemWrite()
+// {
+// 	// Advance VIAs to point where mem write happens
+// 	Cycles += CyclesToMemWrite[CurrentInstruction];
+// 	PollVIAs(CyclesToMemWrite[CurrentInstruction]);
+
+// 	DoIntCheck();
+// }
+
+/*----------------------------------------------------------------------------*/
+/* Set the Z flag if 'in' is 0, and N if bit 7 is set - leave all other bits  */
+/* untouched.                                                                 */
+function SetPSRZN(inOperand: number) {
+  PSR &= ~(FlagZ | FlagN);
+  PSR |= (inOperand === 0 ? FlagZ : 0) | (inOperand & FlagN);
+}
+
+/*----------------------------------------------------------------------------*/
+/* Note: n is 128 for true - not 1                                            */
+// INLINE static void SetPSR(int mask,int c,int z,int i,int d,int b, int v, int n) {
+//   PSR&=~mask;
+//   PSR|=c | (z<<1) | (i<<2) | (d<<3) | (b<<4) | (v<<6) | n;
+// } /* SetPSR */
+
+/*----------------------------------------------------------------------------*/
+/* NOTE!!!!! n is 128 or 0 - not 1 or 0                                       */
+// INLINE static void SetPSRCZN(int c,int z, int n) {
+//   PSR&=~(FlagC | FlagZ | FlagN);
+//   PSR|=c | (z<<1) | n;
+// } /* SetPSRCZN */
+
+/*----------------------------------------------------------------------------*/
+// INLINE static void Push(unsigned char ToPush) {
+//   BEEBWRITEMEM_DIRECT(0x100+StackReg,ToPush);
+//   StackReg--;
+// } /* Push */
+
+/*----------------------------------------------------------------------------*/
+// INLINE static unsigned char Pop(void) {
+//   StackReg++;
+//   return(WholeRam[0x100+StackReg]);
+// } /* Pop */
+
+/*----------------------------------------------------------------------------*/
+// INLINE static void PushWord(int topush)
+// {
+//   Push((topush>>8) & 255);
+//   Push(topush & 255);
+// }
+
+/*----------------------------------------------------------------------------*/
+// INLINE static int PopWord() {
+//   int RetValue = Pop();
+//   RetValue |= Pop() << 8;
+//   return RetValue;
+// }
+
+/*-------------------------------------------------------------------------*/
+
+// Relative addressing mode handler
+
+// INLINE static int RelAddrModeHandler_Data()
+// {
+// 	// For branches - is this correct - i.e. is the program counter incremented
+// 	// at the correct time?
+// 	int EffectiveAddress = (signed char)ReadPaged(ProgramCounter++);
+// 	EffectiveAddress += ProgramCounter;
+
+// 	return EffectiveAddress;
+// }
+
+/*----------------------------------------------------------------------------*/
+
+// INLINE static void ADCInstrHandler(int operand)
+// {
+//   /* NOTE! Not sure about C and V flags */
+//   if (!GETDFLAG) {
+//     int TmpResultC = Accumulator + operand + GETCFLAG;
+//     int TmpResultV = (signed char)Accumulator + (signed char)operand + GETCFLAG;
+//     Accumulator = TmpResultC & 255;
+//     SetPSR(FlagC | FlagZ | FlagV | FlagN, (TmpResultC & 256) > 0,
+//       Accumulator == 0, 0, 0, 0, ((Accumulator & 128) > 0) ^ (TmpResultV < 0),
+//       Accumulator & 128);
+//   } else {
+//     /* Z flag determined from 2's compl result, not BCD result! */
+//     int TmpResult = Accumulator + operand + GETCFLAG;
+//     int ZFlag = (TmpResult & 0xff) == 0;
+
+//     int ln = (Accumulator & 0xf) + (operand & 0xf) + GETCFLAG;
+
+//     int TmpCarry = 0;
+
+//     if (ln > 9) {
+//       ln += 6;
+//       ln &= 0xf;
+//       TmpCarry = 0x10;
+//     }
+
+//     int hn = (Accumulator & 0xf0) + (operand & 0xf0) + TmpCarry;
+//     /* N and V flags are determined before high nibble is adjusted.
+//        NOTE: V is not always correct */
+//     int NFlag = hn & 128;
+//     int VFlag = (hn ^ Accumulator) & 128 && !((Accumulator ^ operand) & 128);
+
+//     int CFlag = 0;
+
+//     if (hn > 0x90) {
+//       hn += 0x60;
+//       hn &= 0xf0;
+//       CFlag = 1;
+//     }
+
+//     Accumulator = hn | ln;
+
+//     SetPSR(FlagC | FlagZ | FlagV | FlagN, CFlag, ZFlag, 0, 0, 0, VFlag, NFlag);
+//   }
+// } /* ADCInstrHandler */
+
+/*----------------------------------------------------------------------------*/
+
+// INLINE static void ANDInstrHandler(int operand)
+// {
+// 	Accumulator &= operand;
+// 	PSR &= ~(FlagZ | FlagN);
+// 	PSR |= ((Accumulator == 0) << 1) | (Accumulator & 128);
+// }
+
+// INLINE static void ASLInstrHandler(int address)
+// {
+//   unsigned char oldVal,newVal;
+//   oldVal=ReadPaged(address);
+//   Cycles+=1;
+//   PollVIAs(1);
+//   WritePaged(address,oldVal);
+//   newVal=(((unsigned int)oldVal)<<1) & 254;
+//   Cycles+=CyclesToMemWrite[CurrentInstruction] - 1;
+//   PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
+//   WritePaged(address,newVal);
+//   SetPSRCZN((oldVal & 128)>0, newVal==0,newVal & 128);
+// } /* ASLInstrHandler */
+
+// INLINE static void ASLInstrHandler_Acc(void) {
+//   unsigned char oldVal,newVal;
+//   /* Accumulator */
+//   oldVal=Accumulator;
+//   Accumulator=newVal=(((unsigned int)Accumulator)<<1) & 254;
+//   SetPSRCZN((oldVal & 128)>0, newVal==0,newVal & 128);
+// } /* ASLInstrHandler_Acc */
+
+// INLINE static void BCCInstrHandler(void) {
+//   if (!GETCFLAG) {
+//     ProgramCounter=RelAddrModeHandler_Data();
+//     Branched = true;
+//   } else ProgramCounter++;
+// } /* BCCInstrHandler */
+
+// INLINE static void BCSInstrHandler(void) {
+//   if (GETCFLAG) {
+//     ProgramCounter=RelAddrModeHandler_Data();
+//     Branched = true;
+//   } else ProgramCounter++;
+// } /* BCSInstrHandler */
+
+// INLINE static void BEQInstrHandler(void) {
+//   if (GETZFLAG) {
+//     ProgramCounter=RelAddrModeHandler_Data();
+//     Branched = true;
+//   } else ProgramCounter++;
+// } /* BEQInstrHandler */
+
+// INLINE static void BITInstrHandler(int operand)
+// {
+//   PSR&=~(FlagZ | FlagN | FlagV);
+//   /* z if result 0, and NV to top bits of operand */
+//   PSR|=(((Accumulator & operand)==0)<<1) | (operand & 192);
+// }
+
+// INLINE static void BMIInstrHandler(void) {
+//   if (GETNFLAG) {
+//     ProgramCounter=RelAddrModeHandler_Data();
+//     Branched = true;
+//   } else ProgramCounter++;
+// } /* BMIInstrHandler */
+
+// INLINE static void BNEInstrHandler(void) {
+//   if (!GETZFLAG) {
+//     ProgramCounter=RelAddrModeHandler_Data();
+//     Branched = true;
+//   } else ProgramCounter++;
+// } /* BNEInstrHandler */
+
+// INLINE static void BPLInstrHandler(void) {
+//   if (!GETNFLAG) {
+//     ProgramCounter=RelAddrModeHandler_Data();
+//     Branched = true;
+//   } else ProgramCounter++;
+// }
+
+// INLINE static void BRKInstrHandler(void) {
+//   PushWord(ProgramCounter+1);
+//   SetPSR(FlagB,0,0,0,0,1,0,0); /* Set B before pushing */
+//   Push(PSR);
+//   SetPSR(FlagI,0,0,1,0,0,0,0); /* Set I after pushing - see Birnbaum */
+//   ProgramCounter=BeebReadMem(0xfffe) | (BeebReadMem(0xffff)<<8);
+// } /* BRKInstrHandler */
+
+// INLINE static void BVCInstrHandler(void) {
+//   if (!GETVFLAG) {
+//     ProgramCounter=RelAddrModeHandler_Data();
+//     Branched = true;
+//   } else ProgramCounter++;
+// } /* BVCInstrHandler */
+
+// INLINE static void BVSInstrHandler(void) {
+//   if (GETVFLAG) {
+//     ProgramCounter=RelAddrModeHandler_Data();
+//     Branched = true;
+//   } else ProgramCounter++;
+// } /* BVSInstrHandler */
+
+// INLINE static void CMPInstrHandler(int operand)
+// {
+//   /* NOTE! Should we consult D flag ? */
+//   unsigned char result = static_cast<unsigned char>(Accumulator - operand);
+//   unsigned char CFlag;
+//   CFlag=0; if (Accumulator>=operand) CFlag=FlagC;
+//   SetPSRCZN(CFlag,Accumulator==operand,result & 128);
+// }
+
+// INLINE static void CPXInstrHandler(int operand)
+// {
+//   unsigned char result = static_cast<unsigned char>(XReg - operand);
+//   SetPSRCZN(XReg>=operand,XReg==operand,result & 128);
+// }
+
+// INLINE static void CPYInstrHandler(int operand)
+// {
+//   unsigned char result = static_cast<unsigned char>(YReg - operand);
+//   SetPSRCZN(YReg>=operand,YReg==operand,result & 128);
+// }
+
+// INLINE static void DECInstrHandler(int address)
+// {
+//   unsigned char val = ReadPaged(address);
+//   Cycles+=1;
+//   PollVIAs(1);
+//   WritePaged(address,val);
+//   val=(val-1);
+//   Cycles+=CyclesToMemWrite[CurrentInstruction] - 1;
+//   PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
+//   WritePaged(address,val);
+//   SetPSRZN(val);
+// }
+
+// INLINE static void DEXInstrHandler(void) {
+//   XReg=(XReg-1) & 255;
+//   SetPSRZN(XReg);
+// } /* DEXInstrHandler */
+
+// INLINE static void EORInstrHandler(int operand)
+// {
+//   Accumulator^=operand;
+//   SetPSRZN(Accumulator);
+// } /* EORInstrHandler */
+
+// INLINE static void INCInstrHandler(int address)
+// {
+//   unsigned char val = ReadPaged(address);
+//   Cycles+=1;
+//   PollVIAs(1);
+//   WritePaged(address,val);
+//   val=(val+1) & 255;
+//   Cycles+=CyclesToMemWrite[CurrentInstruction] - 1;
+//   PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
+//   WritePaged(address,val);
+//   SetPSRZN(val);
+// } /* INCInstrHandler */
+
+// INLINE static void INXInstrHandler(void) {
+//   XReg+=1;
+//   XReg&=255;
+//   SetPSRZN(XReg);
+// } /* INXInstrHandler */
+
+// INLINE static void JSRInstrHandler(int address)
+// {
+//   PushWord(ProgramCounter-1);
+//   ProgramCounter=address;
+// } /* JSRInstrHandler */
+
+function LDAInstrHandler(operand: number) {
+  Accumulator = operand;
+  SetPSRZN(Accumulator);
+}
+
+// INLINE static void LDXInstrHandler(int operand)
+// {
+//   XReg = operand;
+//   SetPSRZN(XReg);
+// }
+
+// INLINE static void LDYInstrHandler(int operand)
+// {
+//   YReg = operand;
+//   SetPSRZN(YReg);
+// }
+
+// INLINE static void LSRInstrHandler(int address)
+// {
+//   unsigned char oldVal = ReadPaged(address);
+//   Cycles+=1;
+//   PollVIAs(1);
+//   WritePaged(address,oldVal);
+//   unsigned char newVal = (((unsigned int)oldVal) >> 1) & 127;
+//   Cycles+=CyclesToMemWrite[CurrentInstruction] - 1;
+//   PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
+//   WritePaged(address,newVal);
+//   SetPSRCZN((oldVal & 1)>0, newVal==0,0);
+// } /* LSRInstrHandler */
+
+// INLINE static void LSRInstrHandler_Acc(void) {
+//   unsigned char oldVal,newVal;
+//   /* Accumulator */
+//   oldVal=Accumulator;
+//   Accumulator=newVal=(((unsigned int)Accumulator)>>1) & 127;
+//   SetPSRCZN((oldVal & 1)>0, newVal==0,0);
+// } /* LSRInstrHandler_Acc */
+
+// INLINE static void ORAInstrHandler(int operand)
+// {
+//   Accumulator=Accumulator | operand;
+//   SetPSRZN(Accumulator);
+// }
+
+// INLINE static void ROLInstrHandler(int address)
+// {
+//   unsigned char oldVal = ReadPaged(address);
+//   Cycles+=1;
+//   PollVIAs(1);
+//   WritePaged(address,oldVal);
+//   unsigned char newVal = ((unsigned int)oldVal<<1) & 254;
+//   newVal+=GETCFLAG;
+//   Cycles+=CyclesToMemWrite[CurrentInstruction] - 1;
+//   PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
+//   WritePaged(address,newVal);
+//   SetPSRCZN((oldVal & 128)>0,newVal==0,newVal & 128);
+// }
+
+// INLINE static void ROLInstrHandler_Acc(void) {
+//   unsigned char oldVal,newVal;
+
+//   oldVal=Accumulator;
+//   newVal=((unsigned int)oldVal<<1) & 254;
+//   newVal+=GETCFLAG;
+//   Accumulator=newVal;
+//   SetPSRCZN((oldVal & 128)>0,newVal==0,newVal & 128);
+// } /* ROLInstrHandler_Acc */
+
+// INLINE static void RORInstrHandler(int address)
+// {
+//   unsigned char oldVal = ReadPaged(address);
+//   Cycles+=1;
+//   PollVIAs(1);
+//   WritePaged(address,oldVal);
+//   unsigned char newVal = ((unsigned int)oldVal >> 1) & 127;
+//   newVal+=GETCFLAG*128;
+//   Cycles+=CyclesToMemWrite[CurrentInstruction] - 1;
+//   PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
+//   WritePaged(address,newVal);
+//   SetPSRCZN(oldVal & 1,newVal==0,newVal & 128);
+// }
+
+// INLINE static void RORInstrHandler_Acc(void) {
+//   unsigned char oldVal = Accumulator;
+//   unsigned char newVal = ((unsigned int)oldVal >> 1) & 127;
+//   newVal+=GETCFLAG*128;
+//   Accumulator=newVal;
+//   SetPSRCZN(oldVal & 1,newVal==0,newVal & 128);
+// }
+
+// INLINE static void SBCInstrHandler(int operand)
+// {
+//   /* NOTE! Not sure about C and V flags */
+//   if (!GETDFLAG) {
+//     int TmpResultV = (signed char)Accumulator - (signed char)operand - (1 - GETCFLAG);
+//     int TmpResultC = Accumulator - operand - (1 - GETCFLAG);
+//     Accumulator = TmpResultC & 255;
+//     SetPSR(FlagC | FlagZ | FlagV | FlagN, TmpResultC >= 0,
+//       Accumulator == 0, 0, 0, 0,
+//       ((Accumulator & 128) > 0) ^ ((TmpResultV & 256) != 0),
+//       Accumulator & 128);
+//   } else {
+//     /* Z flag determined from 2's compl result, not BCD result! */
+//     int TmpResult = Accumulator - operand - (1 - GETCFLAG);
+//     int ZFlag = ((TmpResult & 0xff) == 0);
+
+//     int ohn = operand & 0xf0;
+//     int oln = operand & 0xf;
+
+//     int ln = (Accumulator & 0xf) - oln - (1 - GETCFLAG);
+//     if (ln & 0x10) {
+// 		ln -= 6;
+//     }
+
+//     int TmpCarry = 0;
+
+//     if (ln & 0x20) {
+// 		TmpCarry = 0x10;
+//     }
+
+//     ln &= 0xf;
+//     int hn = (Accumulator & 0xf0) - ohn - TmpCarry;
+//     /* N and V flags are determined before high nibble is adjusted.
+//         NOTE: V is not always correct */
+//     int NFlag = hn & 128;
+
+//     int TmpResultV = (signed char)Accumulator - (signed char)operand - (1 - GETCFLAG);
+//     int VFlag = ((TmpResultV < -128) || (TmpResultV > 127));
+
+//     int CFlag = 1;
+
+//     if (hn & 0x100) {
+// 		hn -= 0x60;
+// 		hn &= 0xf0;
+// 		CFlag = 0;
+//     }
+
+//     Accumulator = hn | ln;
+
+//     SetPSR(FlagC | FlagZ | FlagV | FlagN, CFlag, ZFlag, 0, 0, 0, VFlag, NFlag);
+//   }
+// } /* SBCInstrHandler */
+
+// INLINE static void STXInstrHandler(int address)
+// {
+//   WritePaged(address,XReg);
+// }
+
+// INLINE static void STYInstrHandler(int address)
+// {
+//   WritePaged(address,YReg);
+// }
+
+// ARR instruction hander.
+// See http://www.zimmers.net/anonftp/pub/cbm/documents/chipdata/64doc
+
+// INLINE static void ARRInstrHandler(int Operand)
+// {
+// 	if (GETDFLAG)
+// 	{
+// 		const int Temp = Accumulator & Operand;
+// 		const int HighBits = Temp >> 4;
+// 		const int LowBits  = Temp & 0x0f;
+
+// 		Accumulator = (Temp >> 1) | (GETCFLAG << 7); // ROR
+// 		SetPSRZN(Accumulator);
+
+// 		PSR &= ~(FlagC | FlagV);
+
+// 		PSR |= (((Accumulator ^ Temp) & 0x40) != 0) << 6; // VFlag
+
+// 		if (LowBits + (LowBits & 1) > 5)
+// 		{
+// 			Accumulator = (Accumulator & 0xf0) | ((Accumulator + 6) & 0x0f);
+// 		}
+
+// 		// Update carry flag
+// 		PSR |= (HighBits + (HighBits & 1)) > 5;
+
+// 		if (GETCFLAG)
+// 		{
+// 			Accumulator = (Accumulator + 0x60) & 0xff;
+// 		}
+// 	}
+// 	else
+// 	{
+// 		Accumulator &= Operand;
+// 		RORInstrHandler_Acc();
+
+// 		const int Bit6 = (Accumulator & 0x40) != 0;
+// 		const int Bit5 = (Accumulator & 0x20) != 0;
+
+// 		PSR &= ~(FlagC | FlagV);
+// 		PSR |= Bit6; // FlagC
+// 		PSR |= (Bit6 ^ Bit5) << 6; // FlagV
+// 	}
+// }
+
+// KIL (Halt) instruction handler.
+
+// INLINE static void KILInstrHandler() {
+// 	// Just repeat the instruction indefinitely.
+// 	ProgramCounter--;
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Absolute  addressing mode handler                                       */
+// INLINE static int AbsAddrModeHandler_Data()
+// {
+//   /* Get the address from after the instruction */
+//   int FullAddress;
+//   GETTWOBYTEFROMPC(FullAddress);
+
+//   /* And then read it */
+//   return(ReadPaged(FullAddress));
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Absolute  addressing mode handler                                       */
+// INLINE static int AbsAddrModeHandler_Address()
+// {
+//   /* Get the address from after the instruction */
+//   int FullAddress;
+//   GETTWOBYTEFROMPC(FullAddress);
+
+//   /* And then read it */
+//   return(FullAddress);
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Zero page addressing mode handler                                       */
+// INLINE static int ZeroPgAddrModeHandler_Address()
+// {
+// 	return ReadPaged(ProgramCounter++);
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Indexed with X preinc addressing mode handler                           */
+// INLINE static int IndXAddrModeHandler_Data()
+// {
+// 	unsigned char ZeroPageAddress = (ReadPaged(ProgramCounter++) + XReg) & 255;
+// 	int EffectiveAddress=WholeRam[ZeroPageAddress] | (WholeRam[ZeroPageAddress + 1] << 8);
+// 	return ReadPaged(EffectiveAddress);
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Indexed with X preinc addressing mode handler                           */
+// INLINE static int IndXAddrModeHandler_Address()
+// {
+//   unsigned char ZeroPageAddress = (ReadPaged(ProgramCounter++) + XReg) & 0xff;
+//   int EffectiveAddress = WholeRam[ZeroPageAddress] | (WholeRam[ZeroPageAddress + 1] << 8);
+//   return EffectiveAddress;
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Indexed with Y postinc addressing mode handler                          */
+// INLINE static int IndYAddrModeHandler_Data()
+// {
+//   uint8_t ZPAddr=ReadPaged(ProgramCounter++);
+//   uint16_t EffectiveAddress=WholeRam[ZPAddr]+YReg;
+//   if (EffectiveAddress>0xff) Carried();
+//   EffectiveAddress+=(WholeRam[(uint8_t)(ZPAddr+1)]<<8);
+
+//   return(ReadPaged(EffectiveAddress));
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Indexed with Y postinc addressing mode handler                          */
+// INLINE static int IndYAddrModeHandler_Address()
+// {
+//   uint8_t ZPAddr=ReadPaged(ProgramCounter++);
+//   uint16_t EffectiveAddress=WholeRam[ZPAddr]+YReg;
+//   if (EffectiveAddress>0xff) Carried();
+//   EffectiveAddress+=(WholeRam[(uint8_t)(ZPAddr+1)]<<8);
+
+//   return(EffectiveAddress);
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Zero page wih X offset addressing mode handler                          */
+// INLINE static int ZeroPgXAddrModeHandler_Data()
+// {
+// 	int EffectiveAddress = (ReadPaged(ProgramCounter++) + XReg) & 255;
+// 	return WholeRam[EffectiveAddress];
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Zero page wih X offset addressing mode handler                          */
+// INLINE static int ZeroPgXAddrModeHandler_Address()
+// {
+// 	int EffectiveAddress = (ReadPaged(ProgramCounter++) + XReg) & 255;
+// 	return EffectiveAddress;
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Absolute with X offset addressing mode handler                          */
+// INLINE static int AbsXAddrModeHandler_Data()
+// {
+//   int EffectiveAddress;
+//   GETTWOBYTEFROMPC(EffectiveAddress);
+//   if ((EffectiveAddress & 0xff00)!=((EffectiveAddress+XReg) & 0xff00)) Carried();
+//   EffectiveAddress+=XReg;
+//   EffectiveAddress&=0xffff;
+
+//   return ReadPaged(EffectiveAddress);
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Absolute with X offset addressing mode handler                          */
+// INLINE static int AbsXAddrModeHandler_Address()
+// {
+//   int EffectiveAddress;
+//   GETTWOBYTEFROMPC(EffectiveAddress);
+//   if ((EffectiveAddress & 0xff00)!=((EffectiveAddress+XReg) & 0xff00)) Carried();
+//   EffectiveAddress+=XReg;
+//   EffectiveAddress&=0xffff;
+
+//   return EffectiveAddress;
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Absolute with Y offset addressing mode handler                          */
+// INLINE static int AbsYAddrModeHandler_Data()
+// {
+//   int EffectiveAddress;
+//   GETTWOBYTEFROMPC(EffectiveAddress);
+//   if ((EffectiveAddress & 0xff00)!=((EffectiveAddress+YReg) & 0xff00)) Carried();
+//   EffectiveAddress+=YReg;
+//   EffectiveAddress&=0xffff;
+
+//   return ReadPaged(EffectiveAddress);
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Absolute with Y offset addressing mode handler                          */
+// INLINE static int AbsYAddrModeHandler_Address()
+// {
+//   int EffectiveAddress;
+//   GETTWOBYTEFROMPC(EffectiveAddress);
+//   if ((EffectiveAddress & 0xff00)!=((EffectiveAddress+YReg) & 0xff00)) Carried();
+//   EffectiveAddress+=YReg;
+//   EffectiveAddress&=0xffff;
+
+//   return EffectiveAddress;
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Indirect addressing mode handler                                        */
+// INLINE static int IndAddrModeHandler_Address() {
+//   /* For jump indirect only */
+//   int VectorLocation;
+//   int EffectiveAddress;
+
+//   GETTWOBYTEFROMPC(VectorLocation);
+
+//   /* Ok kiddies, deliberate bug time.
+//   According to my BBC Master Reference Manual Part 2
+//   the 6502 has a bug concerning this addressing mode and VectorLocation==xxFF
+//   so, we're going to emulate that bug -- Richard Gellman */
+//   if ((VectorLocation & 0xff) != 0xff) {
+// 	EffectiveAddress=ReadPaged(VectorLocation);
+// 	EffectiveAddress|=ReadPaged(VectorLocation+1) << 8;
+//   }
+//   else {
+//    EffectiveAddress=ReadPaged(VectorLocation);
+//    EffectiveAddress|=ReadPaged(VectorLocation-255) << 8;
+//   }
+//   return EffectiveAddress;
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Zero page with Y offset addressing mode handler                         */
+// INLINE static int ZeroPgYAddrModeHandler_Data()
+// {
+// 	int EffectiveAddress = (ReadPaged(ProgramCounter++) + YReg) & 255;
+// 	return WholeRam[EffectiveAddress];
+// }
+
+/*-------------------------------------------------------------------------*/
+/* Zero page with Y offset addressing mode handler                         */
+// INLINE static int ZeroPgYAddrModeHandler_Address()
+// {
+//   int EffectiveAddress = (ReadPaged(ProgramCounter++) + YReg) & 255;
+//   return EffectiveAddress;
+// }
+
+/*-------------------------------------------------------------------------*/
+
+// Initialise 6502core
+
+export function Init6502core() {
+  ProgramCounter = BeebReadMem(0xfffc) | (BeebReadMem(0xfffd) << 8);
+
+  // For consistancy of execution
+  Accumulator = 0;
+  XReg = 0;
+  YReg = 0;
+  StackReg = 0xff; // Initial value?
+  PSR = FlagI; // Interrupts off for starters
+
+  // intStatus = 0;
+  // NMIStatus = 0;
+  // NMILock = false;
+}
+
 /*-------------------------------------------------------------------------*/
 /* Execute one 6502 instruction, move program counter on                   */
 export function Exec6502Instruction() {
@@ -138,7 +946,7 @@ export function Exec6502Instruction() {
 
     if (CurrentInstruction == -1) {
       // Read an instruction and post inc program counter
-      CurrentInstruction = 0x1a; //ReadPaged(ProgramCounter++);
+      CurrentInstruction = ReadPaged(ProgramCounter++);
     }
 
     // 	// Advance VIAs to point where mem read happens
@@ -955,10 +1763,10 @@ export function Exec6502Instruction() {
       // 			YReg = Accumulator;
       // 			SetPSRZN(Accumulator);
       // 			break;
-      // 		case 0xa9:
-      // 			// LDA imm
-      // 			LDAInstrHandler(ReadPaged(ProgramCounter++));
-      // 			break;
+      case 0xa9:
+        // LDA imm
+        LDAInstrHandler(ReadPaged(ProgramCounter++));
+        break;
       // 		case 0xaa:
       // 			// TXA
       // 			XReg = Accumulator;
@@ -1340,6 +2148,8 @@ export function Exec6502Instruction() {
       // 			SBCInstrHandler(ReadPaged(Address));
       // 		}
       // 		break;
+      default:
+        throw `not impl: ${CurrentInstruction.toString(16)}`;
     }
 
     // 	// This block corrects the cycle count for the branch instructions

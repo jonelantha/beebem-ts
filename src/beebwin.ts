@@ -70,6 +70,7 @@ async function ApplyPrefs() {
 
 async function ResetBeebSystem(LoadRoms: boolean) {
   await BeebMemInit(LoadRoms);
+  Init6502core();
 
   VideoInit();
 }
