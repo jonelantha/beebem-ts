@@ -62,13 +62,15 @@ tempVideoOverride({
 const memFile = params.get("mem");
 if (!memFile) throw "no mem param";
 
-await Initialise();
+(async function run() {
+  await Initialise();
 
-await tempLoadMemSnapshot(memFile);
+  await tempLoadMemSnapshot(memFile);
 
-const start = performance.now();
+  const start = performance.now();
 
-while (performance.now() - start < 100) {
-  const sleepTime = Exec6502Instruction();
-  if (sleepTime) await new Promise<void>(res => setTimeout(res, sleepTime));
-}
+  while (performance.now() - start < 100) {
+    const sleepTime = Exec6502Instruction();
+    if (sleepTime) await new Promise<void>(res => setTimeout(res, sleepTime));
+  }
+})(); // needed for safari to pick up top level throws

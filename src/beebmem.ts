@@ -28,8 +28,13 @@ Boston, MA  02110-1301, USA.
 
 import { getIC32State } from "./sysvia";
 
-const WholeRam = new Uint8Array(65536);
+const WholeRam = new Uint8Array(0x10000);
 export const getWholeRam = () => WholeRam;
+const Roms = Array.from({ length: 16 }, () => new Uint8Array(0x4000));
+//const RomPopulated = Array.from({ length: 16 }, () => false);
+
+let PagedRomReg = 0;
+let ROMSEL = 0;
 
 export async function tempLoadMemSnapshot(file: string) {
   const res = await fetch(file);
@@ -73,7 +78,7 @@ export function BeebMemPtrWithWrap(Address: number, Length: number) {
     return Address;
   }
 
-  throw "error";
+  throw "not impl";
 
   // int toCopy = 0x8000 - Address;
 
@@ -123,6 +128,11 @@ function WrapAddrMode7(Address: number) {
 // Special case of BeebMemPtrWithWrap for use in mode 7
 
 export function BeebMemPtrWithWrapMode7(Address: number, Length: number) {
+  const start = WrapAddrMode7(Address);
+  const end = WrapAddrMode7(Address + Length);
+
+  if (start + Length !== end) throw "not impl";
+
   return WrapAddrMode7(Address);
   // static unsigned char tmpBuf[1024];
 
@@ -136,15 +146,317 @@ export function BeebMemPtrWithWrapMode7(Address: number, Length: number) {
 }
 
 /*----------------------------------------------------------------------------*/
-export function BeebMemInit(_LoadRoms: boolean) {
+export function BeebReadMem(Address: number) {
+  //const Value = 0xff;
+
+  if (Address >= 0x8000 && Address < 0xc000)
+    return Roms[ROMSEL][Address - 0x8000];
+  if (Address < 0xfc00) return WholeRam[Address];
+  if (Address >= 0xff00) return WholeRam[Address];
+
+  /* IO space */
+
+  if (Address >= 0xfc00 && Address < 0xfe00) {
+    throw "not impl";
+    // SyncIO();
+    // AdjustForIORead();
+  }
+
+  /* VIAs first - games seem to do really heavy reading of these */
+  /* Can read from a via using either of the two 16 bytes blocks */
+  if ((Address & ~0xf) == 0xfe40 || (Address & ~0xf) == 0xfe50) {
+    throw "not impl";
+    // SyncIO();
+    // Value = SysVIARead(Address & 0xf);
+    // AdjustForIORead();
+    // return Value;
+  }
+
+  if ((Address & ~0xf) == 0xfe60 || (Address & ~0xf) == 0xfe70) {
+    throw "not impl";
+    // SyncIO();
+    // Value = UserVIARead(Address & 0xf);
+    // AdjustForIORead();
+    // return Value;
+  }
+
+  if ((Address & ~7) == 0xfe00) {
+    throw "not impl";
+    // SyncIO();
+    // Value = CRTCRead(Address & 0x7);
+    // AdjustForIORead();
+    // return Value;
+  }
+
+  if (Address == 0xfe08) {
+    throw "not impl";
+    // SyncIO();
+    // Value = SerialACIAReadStatus();
+    // AdjustForIORead();
+    // return Value;
+  }
+
+  if (Address == 0xfe09) {
+    throw "not impl";
+    // SyncIO();
+    // Value = SerialACIAReadRxData();
+    // AdjustForIORead();
+    // return Value;
+  }
+
+  if (Address == 0xfe10) {
+    throw "not impl";
+    // SyncIO();
+    // Value = SerialULARead();
+    // AdjustForIORead();
+    // return Value;
+  }
+
+  if ((Address & ~3) == 0xfe20) {
+    throw "not impl";
+    //return(VideoULARead(Address & 0xf));
+  }
+
+  if ((Address & ~3) == 0xfe30) {
+    return PagedRomReg; // report back ROMSEL - I'm sure the beeb allows ROMSEL read..
+    // correct me if im wrong. - Richard Gellman
+  }
+
+  if ((Address & ~0x1f) == 0xfe80) {
+    throw "not impl";
+    //return Disc8271Read(Address & 0x7);
+  }
+
+  if ((Address & ~0x1f) == 0xfea0) {
+    throw "not impl";
+    //return(0xfe); // if not enabled
+  }
+
+  if ((Address & ~0x1f) == 0xfec0) {
+    throw "not impl";
+    // SyncIO();
+    // Value = AtoDRead(Address & 0xf);
+    // AdjustForIORead();
+    // return Value;
+  }
+
+  if ((Address & ~0x1f) == 0xfee0) {
+    return 0xfe; //ReadTubeFromHostSide(Address & 7); // Read From Tube
+  }
+
+  /*if ((Address & ~0x3) == 0xfc10) {
+		return 0xff;// (TeletextRead(Address & 0x3));
+	}
+
+	if ((Address & ~0x3)==0xfc40) {
+		//if (SCSIDriveEnabled) return(SCSIRead(Address & 0x3));
+	}
+
+	if ((Address & ~0x7)==0xfc40) {
+		if (IDEDriveEnabled)  return(IDERead(Address & 0x7));
+	}
+
+	if ((Address & ~0x3)==0xfdf0) {
+		return SASIRead(Address & 0x3);
+	}*/
+
+  return 0xff;
+} /* BeebReadMem */
+
+/*----------------------------------------------------------------------------*/
+
+function DoRomChange(NewBank: number) {
+  ROMSEL = NewBank & 0xf;
+
+  NewBank &= 0xf; // strip top bit if Model B
+  PagedRomReg = NewBank;
+}
+
+/*----------------------------------------------------------------------------*/
+export function BeebWriteMem(Address: number, Value: number) {
+  if ((Value & 0xff) !== Value) throw "value error";
+
+  if (Address < 0x8000) {
+    WholeRam[Address] = Value;
+    return;
+  }
+
+  if (Address < 0xc000 && Address >= 0x8000) {
+    // Write to ROM
+    return;
+  }
+
+  /* IO space */
+
+  if (Address >= 0xfc00 && Address < 0xfe00) {
+    throw "not impl";
+    // SyncIO();
+    // AdjustForIOWrite();
+  }
+
+  /* Can write to a via using either of the two 16 bytes blocks */
+  if ((Address & ~0xf) == 0xfe40 || (Address & ~0xf) == 0xfe50) {
+    throw "not impl";
+    // SyncIO();
+    // AdjustForIOWrite();
+    // SysVIAWrite(Address & 0xf, Value);
+    // return;
+  }
+
+  /* Can write to a via using either of the two 16 bytes blocks */
+  if ((Address & ~0xf) == 0xfe60 || (Address & ~0xf) == 0xfe70) {
+    throw "not impl";
+    // SyncIO();
+    // AdjustForIOWrite();
+    // UserVIAWrite(Address & 0xf, Value);
+    // return;
+  }
+
+  if ((Address & ~0x7) == 0xfe00) {
+    throw "not impl";
+    // SyncIO();
+    // AdjustForIOWrite();
+    // CRTCWrite(Address & 0x7, Value);
+    // return;
+  }
+
+  if (Address == 0xfe08) {
+    throw "not impl";
+    // SyncIO();
+    // AdjustForIOWrite();
+    // SerialACIAWriteControl(Value);
+    // return;
+  }
+
+  if (Address == 0xfe09) {
+    throw "not impl";
+    // SyncIO();
+    // AdjustForIOWrite();
+    // SerialACIAWriteTxData(Value);
+    // return;
+  }
+
+  if (Address == 0xfe10) {
+    throw "not impl";
+    // SyncIO();
+    // AdjustForIOWrite();
+    // SerialULAWrite(Value);
+    // return;
+  }
+
+  if ((Address & ~0x3) == 0xfe20) {
+    throw "not impl";
+    // VideoULAWrite(Address & 0xf, Value);
+    // return;
+  }
+
+  if (Address >= 0xfe30 && Address < 0xfe34) {
+    DoRomChange(Value);
+    return;
+  }
+
+  if ((Address & ~0x1f) == 0xfe80) {
+    throw "not impl";
+    // Disc8271Write(Address & 7, Value);
+    // return;
+  }
+
+  if ((Address & ~0x1f) == 0xfec0) {
+    throw "not impl";
+    // SyncIO();
+    // AdjustForIOWrite();
+    // AtoDWrite(Address & 0xf, Value);
+    // return;
+  }
+
+  /*if ((Address & ~0xf) == 0xfee0)
+	{
+		//WriteTubeFromHostSide(Address & 7, Value);
+	}
+
+	if ((Address & ~0x3)==0xfc10) {
+		//TeletextWrite((Address & 0x3),Value);
+		return;
+	}
+
+	if ((Address & ~0x3)==0xfc40) {
+		if (SCSIDriveEnabled) {
+			SCSIWrite((Address & 0x3),Value);
+			return;
+		}
+	}
+
+	if ((Address & ~0x7)==0xfc40) {
+		if (IDEDriveEnabled) {
+			IDEWrite((Address & 0x7),Value);
+			return;
+		}
+	}
+
+	if ((Address & ~0x3)==0xfdf0) {
+		//SASIWrite((Address & 0x3),Value);
+		return;
+	}*/
+}
+
+/*----------------------------------------------------------------------------*/
+
+async function LoadOSRom(osRom: string) {
+  const res = await fetch(osRom);
+  const buffer = await res.arrayBuffer();
+
+  if (buffer.byteLength !== 0x4000) throw "os rom length incorrect";
+
+  WholeRam.set(new Uint8Array(buffer), 0xc000);
+
+  // Try to read OS ROM memory map:
+  // if ((extension = strrchr(fullname, '.')) != NULL)
+  // 	*extension = 0;
+  // strncat(fullname, ".map", _MAX_PATH);
+  // DebugLoadMemoryMap(fullname, 16);
+}
+
+async function LoadPagedRom(bank: number, romName: string) {
+  //RomPopulated[bank] = true;
+
+  // Read ROM:
+  const res = await fetch(romName);
+  const buffer = await res.arrayBuffer();
+
+  if (buffer.byteLength !== 0x4000) throw "rom length incorrect";
+
+  Roms[bank].set(new Uint8Array(buffer));
+
+  // Try to read ROM memory map:
+  // if ((extension = strrchr(fullname, '.')) != NULL)
+  // 	*extension = 0;
+  // strncat(fullname, ".map", _MAX_PATH);
+  // DebugLoadMemoryMap(fullname, bank);
+}
+
+async function BeebReadRoms() {
+  // Clear ROMs
+  for (let bank = 0; bank < 16; bank++) {
+    //RomPopulated[bank] = false;
+    Roms[bank].fill(0);
+  }
+
+  await LoadOSRom("/roms/OS12.rom");
+  await LoadPagedRom(14, "/roms/DNFS.rom");
+  await LoadPagedRom(15, "/roms/BASIC2.rom");
+}
+
+/*----------------------------------------------------------------------------*/
+export async function BeebMemInit(LoadRoms: boolean) {
   // Reset everything
-  // memset(WholeRam,0,0x8000);
-  // if (LoadRoms) {
-  //   // This shouldn't be required for sideways RAM.
-  //   DebugInitMemoryMaps();
-  //   BeebReadRoms(); // Only load roms on start
-  // }
-  // /* Put first ROM in */
-  // memcpy(WholeRam+0x8000,Roms[0xf],0x4000);
-  // PagedRomReg=0xf;
+  WholeRam.fill(0, 0, 0x8000);
+
+  if (LoadRoms) {
+    // This shouldn't be required for sideways RAM.
+    //   DebugInitMemoryMaps();
+    await BeebReadRoms(); // Only load roms on start
+  }
+  /* Put first ROM in */
+  WholeRam.set(Roms[0xf], 0x8000);
+  PagedRomReg = 0xf;
 }

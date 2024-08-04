@@ -54,22 +54,22 @@ export async function Initialise() {
   CreateBeebWindow();
   CreateBitmap();
 
-  ApplyPrefs();
+  await ApplyPrefs();
 
   await BuildMode7Font("/teletext.fnt");
 }
 
 /****************************************************************************/
-function ApplyPrefs() {
+async function ApplyPrefs() {
   InitSurfaces();
 
-  ResetBeebSystem(true);
+  await ResetBeebSystem(true);
 }
 
 /****************************************************************************/
 
-function ResetBeebSystem(LoadRoms: boolean) {
-  BeebMemInit(LoadRoms);
+async function ResetBeebSystem(LoadRoms: boolean) {
+  await BeebMemInit(LoadRoms);
 
   VideoInit();
 }
