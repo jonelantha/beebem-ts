@@ -27,6 +27,7 @@ Boston, MA  02110-1301, USA.
 // IDE Interface: JGH jgh@mdfs.net 25/12/2011
 
 import { getIC32State } from "./sysvia";
+import { VideoULARead, VideoULAWrite } from "./video";
 
 const WholeRam = new Uint8Array(0x10000);
 export const getWholeRam = () => WholeRam;
@@ -213,8 +214,7 @@ export function BeebReadMem(Address: number) {
   }
 
   if ((Address & ~3) == 0xfe20) {
-    throw "not impl";
-    //return(VideoULARead(Address & 0xf));
+    return VideoULARead(Address & 0xf);
   }
 
   if ((Address & ~3) == 0xfe30) {
@@ -345,9 +345,8 @@ export function BeebWriteMem(Address: number, Value: number) {
   }
 
   if ((Address & ~0x3) == 0xfe20) {
-    throw "not impl";
-    // VideoULAWrite(Address & 0xf, Value);
-    // return;
+    VideoULAWrite(Address & 0xf, Value);
+    return;
   }
 
   if (Address >= 0xfe30 && Address < 0xfe34) {

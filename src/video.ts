@@ -1299,7 +1299,7 @@ export function VideoInit() {
 }
 
 /*-------------------------------------------------------------------------------------------------------------*/
-function VideoULAWrite(Address: number, Value: number) {
+export function VideoULAWrite(Address: number, Value: number) {
   if (Address & 1) {
     VideoULA_Palette[(Value & 0xf0) >> 4] = (Value & 0xf) ^ 7;
     FastTable_Valid = false;
@@ -1322,6 +1322,12 @@ function VideoULAWrite(Address: number, Value: number) {
     }
     AdjustVideo();
   }
+}
+
+/*-------------------------------------------------------------------------------------------------------------*/
+
+export function VideoULARead(_Address: number) {
+  return 0xfe; // Read not defined from Video ULA
 }
 
 /*-------------------------------------------------------------------------------------------------------------*/
