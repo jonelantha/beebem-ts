@@ -26,8 +26,13 @@ Boston, MA  02110-1301, USA.
 // Econet emulation: Rob O'Donnell robert@irrelevant.com 28/12/2004
 // IDE Interface: JGH jgh@mdfs.net 25/12/2011
 
-import { getIC32State } from "./sysvia";
+import { AdjustForIORead, SyncIO } from "./6502core";
+import { getIC32State, SysVIARead } from "./sysvia";
 import { VideoULARead, VideoULAWrite } from "./video";
+
+export function BEEBREADMEM_DIRECT(Address: number) {
+  return WholeRam[Address];
+}
 
 export function BEEBWRITEMEM_DIRECT(Address: number, Value: number) {
   WholeRam[Address] = Value;
@@ -152,7 +157,7 @@ export function BeebMemPtrWithWrapMode7(Address: number, Length: number) {
 
 /*----------------------------------------------------------------------------*/
 export function BeebReadMem(Address: number) {
-  //const Value = 0xff;
+  let Value = 0xff;
 
   if (Address >= 0x8000 && Address < 0xc000)
     return Roms[ROMSEL][Address - 0x8000];
@@ -170,11 +175,10 @@ export function BeebReadMem(Address: number) {
   /* VIAs first - games seem to do really heavy reading of these */
   /* Can read from a via using either of the two 16 bytes blocks */
   if ((Address & ~0xf) == 0xfe40 || (Address & ~0xf) == 0xfe50) {
-    throw "not impl";
-    // SyncIO();
-    // Value = SysVIARead(Address & 0xf);
-    // AdjustForIORead();
-    // return Value;
+    SyncIO();
+    Value = SysVIARead(Address & 0xf);
+    AdjustForIORead();
+    return Value;
   }
 
   if ((Address & ~0xf) == 0xfe60 || (Address & ~0xf) == 0xfe70) {

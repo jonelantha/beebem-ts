@@ -20,6 +20,14 @@ Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 Boston, MA  02110-1301, USA.
 ****************************************************************/
 
+import {
+  BeebReadMem,
+  BEEBREADMEM_DIRECT,
+  BeebWriteMem,
+  BEEBWRITEMEM_DIRECT,
+} from "./beebmem";
+import { SysVIA_poll } from "./sysvia";
+import { UserVIA_poll } from "./uservia";
 import { VideoPoll } from "./video";
 
 // header
@@ -50,6 +58,9 @@ export const IncTrigger = (after: number, trigger: number) => trigger + after;
 export const ClearTrigger = () => CycleCountTMax;
 
 // main
+
+let tempInstCount = 0;
+export const getInstCount = () => tempInstCount;
 
 let CurrentInstruction = -1;
 
@@ -156,7 +167,7 @@ let IntDue = false;
    to it (usually -ve) */
 let CyclesToInt = NO_TIMER_INT_DUE; // int
 
-// static bool Branched; // true if the instruction branched
+let Branched = false; // true if the instruction branched
 // // 1 if first cycle happened
 
 // Get a two byte address from the program counter, and then post inc
@@ -172,30 +183,30 @@ const ReadPaged = BeebReadMem;
 
 // Correct cycle count for indirection across page boundary
 
-// static INLINE void Carried()
-// {
-// 	if (((CurrentInstruction & 0xf) == 0x1 ||
-// 	     (CurrentInstruction & 0xf) == 0x9 ||
-// 	     (CurrentInstruction & 0xf) == 0xd) &&
-// 	    (CurrentInstruction & 0xf0) != 0x90)
-// 	{
-// 		Cycles++;
-// 	}
-// 	else if (CurrentInstruction == 0x1c ||
-// 	         CurrentInstruction == 0x3c ||
-// 	         CurrentInstruction == 0x5c ||
-// 	         CurrentInstruction == 0x7c ||
-// 	         CurrentInstruction == 0xb3 ||
-// 	         CurrentInstruction == 0xbb ||
-// 	         CurrentInstruction == 0xbc ||
-// 	         CurrentInstruction == 0xbe ||
-// 	         CurrentInstruction == 0xbf ||
-// 	         CurrentInstruction == 0xdc ||
-// 	         CurrentInstruction == 0xfc)
-// 	{
-// 		Cycles++;
-// 	}
-// }
+function Carried() {
+  if (
+    ((CurrentInstruction & 0xf) == 0x1 ||
+      (CurrentInstruction & 0xf) == 0x9 ||
+      (CurrentInstruction & 0xf) == 0xd) &&
+    (CurrentInstruction & 0xf0) != 0x90
+  ) {
+    Cycles++;
+  } else if (
+    CurrentInstruction == 0x1c ||
+    CurrentInstruction == 0x3c ||
+    CurrentInstruction == 0x5c ||
+    CurrentInstruction == 0x7c ||
+    CurrentInstruction == 0xb3 ||
+    CurrentInstruction == 0xbb ||
+    CurrentInstruction == 0xbc ||
+    CurrentInstruction == 0xbe ||
+    CurrentInstruction == 0xbf ||
+    CurrentInstruction == 0xdc ||
+    CurrentInstruction == 0xfc
+  ) {
+    Cycles++;
+  }
+}
 
 /*----------------------------------------------------------------------------*/
 function DoIntCheck() {
@@ -214,26 +225,21 @@ function DoIntCheck() {
 // IO read + write take extra cycle & require sync with 1MHz clock (taken
 // from Model-b - have not seen this documented anywhere)
 
-// void SyncIO(void)
-// {
-// 	if ((TotalCycles+Cycles) & 1)
-// 	{
-// 		Cycles++;
-// 		IOCycles = 1;
-// 		PollVIAs(1);
-// 	}
-// 	else
-// 	{
-// 		IOCycles = 0;
-// 	}
-// }
+export function SyncIO() {
+  if ((TotalCycles + Cycles) & 1) {
+    Cycles++;
+    IOCycles = 1;
+    PollVIAs(1);
+  } else {
+    IOCycles = 0;
+  }
+}
 
-// void AdjustForIORead(void)
-// {
-// 	Cycles++;
-// 	IOCycles += 1;
-// 	PollVIAs(1);
-// }
+export function AdjustForIORead() {
+  Cycles++;
+  IOCycles += 1;
+  PollVIAs(1);
+}
 
 // void AdjustForIOWrite(void)
 // {
@@ -294,10 +300,10 @@ function SetPSR(
 
 /*----------------------------------------------------------------------------*/
 /* NOTE!!!!! n is 128 or 0 - not 1 or 0                                       */
-// INLINE static void SetPSRCZN(int c,int z, int n) {
-//   PSR&=~(FlagC | FlagZ | FlagN);
-//   PSR|=c | (z<<1) | n;
-// } /* SetPSRCZN */
+function SetPSRCZN(c: 1 | 0, z: 1 | 0, n: 128 | 0) {
+  PSR &= ~(FlagC | FlagZ | FlagN);
+  PSR |= c | (z << 1) | n;
+} /* SetPSRCZN */
 
 /*----------------------------------------------------------------------------*/
 /**
@@ -334,15 +340,14 @@ function PushWord(topush: number) {
 
 // Relative addressing mode handler
 
-// INLINE static int RelAddrModeHandler_Data()
-// {
-// 	// For branches - is this correct - i.e. is the program counter incremented
-// 	// at the correct time?
-// 	int EffectiveAddress = (signed char)ReadPaged(ProgramCounter++);
-// 	EffectiveAddress += ProgramCounter;
+function RelAddrModeHandler_Data() {
+  // For branches - is this correct - i.e. is the program counter incremented
+  // at the correct time?
+  let EffectiveAddress = /*(signed char)*/ ReadPaged(ProgramCounter++);
+  EffectiveAddress += ProgramCounter;
 
-// 	return EffectiveAddress;
-// }
+  return EffectiveAddress;
+}
 
 /*----------------------------------------------------------------------------*/
 
@@ -414,13 +419,18 @@ function PushWord(topush: number) {
 //   SetPSRCZN((oldVal & 128)>0, newVal==0,newVal & 128);
 // } /* ASLInstrHandler */
 
-// INLINE static void ASLInstrHandler_Acc(void) {
-//   unsigned char oldVal,newVal;
-//   /* Accumulator */
-//   oldVal=Accumulator;
-//   Accumulator=newVal=(((unsigned int)Accumulator)<<1) & 254;
-//   SetPSRCZN((oldVal & 128)>0, newVal==0,newVal & 128);
-// } /* ASLInstrHandler_Acc */
+function ASLInstrHandler_Acc() {
+  let oldVal: number; // unsigned char
+  let newVal: number; // unsigned char
+  /* Accumulator */
+  oldVal = Accumulator;
+  Accumulator = newVal = /*(unsigned int)*/ (Accumulator << 1) & 254;
+  SetPSRCZN(
+    (oldVal & 128) > 0 ? 1 : 0,
+    newVal == 0 ? 1 : 0,
+    newVal & 128 ? 128 : 0,
+  );
+} /* ASLInstrHandler_Acc */
 
 // INLINE static void BCCInstrHandler(void) {
 //   if (!GETCFLAG) {
@@ -436,12 +446,12 @@ function PushWord(topush: number) {
 //   } else ProgramCounter++;
 // } /* BCSInstrHandler */
 
-// INLINE static void BEQInstrHandler(void) {
-//   if (GETZFLAG) {
-//     ProgramCounter=RelAddrModeHandler_Data();
-//     Branched = true;
-//   } else ProgramCounter++;
-// } /* BEQInstrHandler */
+function BEQInstrHandler() {
+  if (GETZFLAG()) {
+    ProgramCounter = RelAddrModeHandler_Data();
+    Branched = true;
+  } else ProgramCounter++;
+} /* BEQInstrHandler */
 
 // INLINE static void BITInstrHandler(int operand)
 // {
@@ -457,12 +467,12 @@ function PushWord(topush: number) {
 //   } else ProgramCounter++;
 // } /* BMIInstrHandler */
 
-// INLINE static void BNEInstrHandler(void) {
-//   if (!GETZFLAG) {
-//     ProgramCounter=RelAddrModeHandler_Data();
-//     Branched = true;
-//   } else ProgramCounter++;
-// } /* BNEInstrHandler */
+function BNEInstrHandler() {
+  if (!GETZFLAG) {
+    ProgramCounter = RelAddrModeHandler_Data();
+    Branched = true;
+  } else ProgramCounter++;
+} /* BNEInstrHandler */
 
 // INLINE static void BPLInstrHandler(void) {
 //   if (!GETNFLAG) {
@@ -493,14 +503,16 @@ function PushWord(topush: number) {
 //   } else ProgramCounter++;
 // } /* BVSInstrHandler */
 
-// INLINE static void CMPInstrHandler(int operand)
-// {
-//   /* NOTE! Should we consult D flag ? */
-//   unsigned char result = static_cast<unsigned char>(Accumulator - operand);
-//   unsigned char CFlag;
-//   CFlag=0; if (Accumulator>=operand) CFlag=FlagC;
-//   SetPSRCZN(CFlag,Accumulator==operand,result & 128);
-// }
+/**
+ * @param operand int
+ */
+function CMPInstrHandler(operand: number) {
+  /* NOTE! Should we consult D flag ? */
+  const result = Accumulator - operand;
+  let CFlag: 0 | 1 = 0;
+  if (Accumulator >= operand) CFlag = FlagC;
+  SetPSRCZN(CFlag, Accumulator == operand ? 1 : 0, result & 128 ? 128 : 0);
+}
 
 // INLINE static void CPXInstrHandler(int operand)
 // {
@@ -568,11 +580,13 @@ function LDAInstrHandler(operand: number) {
   SetPSRZN(Accumulator);
 }
 
-// INLINE static void LDXInstrHandler(int operand)
-// {
-//   XReg = operand;
-//   SetPSRZN(XReg);
-// }
+/**
+ * @param operand int
+ */
+function LDXInstrHandler(operand: number) {
+  XReg = operand;
+  SetPSRZN(XReg);
+}
 
 // INLINE static void LDYInstrHandler(int operand)
 // {
@@ -770,15 +784,13 @@ function LDAInstrHandler(operand: number) {
 
 /*-------------------------------------------------------------------------*/
 /* Absolute  addressing mode handler                                       */
-// INLINE static int AbsAddrModeHandler_Data()
-// {
-//   /* Get the address from after the instruction */
-//   int FullAddress;
-//   GETTWOBYTEFROMPC(FullAddress);
+function AbsAddrModeHandler_Data() {
+  /* Get the address from after the instruction */
+  const FullAddress = GETTWOBYTEFROMPC();
 
-//   /* And then read it */
-//   return(ReadPaged(FullAddress));
-// }
+  /* And then read it */
+  return ReadPaged(FullAddress);
+}
 
 /*-------------------------------------------------------------------------*/
 /* Absolute  addressing mode handler                                       */
@@ -792,10 +804,9 @@ function AbsAddrModeHandler_Address() {
 
 /*-------------------------------------------------------------------------*/
 /* Zero page addressing mode handler                                       */
-// INLINE static int ZeroPgAddrModeHandler_Address()
-// {
-// 	return ReadPaged(ProgramCounter++);
-// }
+function ZeroPgAddrModeHandler_Address() {
+  return ReadPaged(ProgramCounter++);
+}
 
 /*-------------------------------------------------------------------------*/
 /* Indexed with X preinc addressing mode handler                           */
@@ -829,15 +840,14 @@ function AbsAddrModeHandler_Address() {
 
 /*-------------------------------------------------------------------------*/
 /* Indexed with Y postinc addressing mode handler                          */
-// INLINE static int IndYAddrModeHandler_Address()
-// {
-//   uint8_t ZPAddr=ReadPaged(ProgramCounter++);
-//   uint16_t EffectiveAddress=WholeRam[ZPAddr]+YReg;
-//   if (EffectiveAddress>0xff) Carried();
-//   EffectiveAddress+=(WholeRam[(uint8_t)(ZPAddr+1)]<<8);
+function IndYAddrModeHandler_Address() {
+  const ZPAddr = ReadPaged(ProgramCounter++);
+  let EffectiveAddress = BEEBREADMEM_DIRECT(ZPAddr) + YReg;
+  if (EffectiveAddress > 0xff) Carried();
+  EffectiveAddress += BEEBREADMEM_DIRECT(ZPAddr + 1) << 8;
 
-//   return(EffectiveAddress);
-// }
+  return EffectiveAddress;
+}
 
 /*-------------------------------------------------------------------------*/
 /* Zero page wih X offset addressing mode handler                          */
@@ -1008,7 +1018,7 @@ export function Exec6502Instruction() {
     // 		Dis6502();
     // 	}
 
-    // 	Branched = false;
+    Branched = false;
     iFlagJustCleared = false;
     iFlagJustSet = false;
     Cycles = 0;
@@ -1016,7 +1026,7 @@ export function Exec6502Instruction() {
     IntDue = false;
     CurrentInstruction = -1;
 
-    // 	OldPC = ProgramCounter;
+    const OldPC = ProgramCounter;
     // 	PrePC = ProgramCounter;
 
     if (CurrentInstruction == -1) {
@@ -1027,6 +1037,8 @@ export function Exec6502Instruction() {
     // 	// Advance VIAs to point where mem read happens
     ViaCycles = 0;
     // 	AdvanceCyclesForMemRead();
+
+    tempInstCount++;
 
     switch (CurrentInstruction) {
       // 		case 0x00:
@@ -1078,10 +1090,10 @@ export function Exec6502Instruction() {
       // 			// ORA imm
       // 			ORAInstrHandler(ReadPaged(ProgramCounter++));
       // 			break;
-      // 		case 0x0a:
-      // 			// ASL A
-      // 			ASLInstrHandler_Acc();
-      // 			break;
+      case 0x0a:
+        // ASL A
+        ASLInstrHandler_Acc();
+        break;
       // 		case 0x0b:
       // 		case 0x2b:
       // 			// Undocumented instruction: ANC imm
@@ -1370,10 +1382,10 @@ export function Exec6502Instruction() {
       // 				EORInstrHandler(WholeRam[ZeroPageAddress]);
       // 			}
       // 			break;
-      // 		case 0x48:
-      // 			// PHA
-      // 			Push(Accumulator);
-      // 			break;
+      case 0x48:
+        // PHA
+        Push(Accumulator);
+        break;
       // 		case 0x49:
       // 			// EOR imm
       // 			EORInstrHandler(ReadPaged(ProgramCounter++));
@@ -1596,13 +1608,13 @@ export function Exec6502Instruction() {
       // 				ADCInstrHandler(WholeRam[ZeroPageAddress]);
       // 			}
       // 			break;
-      // 		case 0x78:
-      // 			// SEI
-      // 			if (!(PSR & FlagI)) {
-      // 				iFlagJustSet = true;
-      // 			}
-      // 			PSR |= FlagI;
-      // 			break;
+      case 0x78:
+        // SEI
+        if (!(PSR & FlagI)) {
+          iFlagJustSet = true;
+        }
+        PSR |= FlagI;
+        break;
       // 		case 0x79:
       // 			// ADC abs,Y
       // 			ADCInstrHandler(AbsYAddrModeHandler_Data());
@@ -1661,16 +1673,16 @@ export function Exec6502Instruction() {
       // 			AdvanceCyclesForMemWrite();
       // 			BEEBWRITEMEM_DIRECT(ZeroPgAddrModeHandler_Address(), YReg);
       // 			break;
-      // 		case 0x85:
-      // 			// STA zp
-      // 			AdvanceCyclesForMemWrite();
-      // 			BEEBWRITEMEM_DIRECT(ZeroPgAddrModeHandler_Address(), Accumulator);
-      // 			break;
-      // 		case 0x86:
-      // 			// STX zp
-      // 			AdvanceCyclesForMemWrite();
-      // 			BEEBWRITEMEM_DIRECT(ZeroPgAddrModeHandler_Address(), XReg);
-      // 			break;
+      case 0x85:
+        // STA zp
+        AdvanceCyclesForMemWrite();
+        BEEBWRITEMEM_DIRECT(ZeroPgAddrModeHandler_Address(), Accumulator);
+        break;
+      case 0x86:
+        // STX zp
+        AdvanceCyclesForMemWrite();
+        BEEBWRITEMEM_DIRECT(ZeroPgAddrModeHandler_Address(), XReg);
+        break;
       // 		case 0x87:
       // 			// Undocumented instruction: SAX zp
       // 			// This one does not seem to change the processor flags
@@ -1720,11 +1732,11 @@ export function Exec6502Instruction() {
       // 			// BCC rel
       // 			BCCInstrHandler();
       // 			break;
-      // 		case 0x91:
-      // 			// STA (zp),Y
-      // 			AdvanceCyclesForMemWrite();
-      // 			WritePaged(IndYAddrModeHandler_Address(), Accumulator);
-      // 			break;
+      case 0x91:
+        // STA (zp),Y
+        AdvanceCyclesForMemWrite();
+        WritePaged(IndYAddrModeHandler_Address(), Accumulator);
+        break;
       // 		case 0x92:
       // 			// Undocumented instruction: KIL
       // 			KILInstrHandler();
@@ -1766,10 +1778,10 @@ export function Exec6502Instruction() {
       // 			AdvanceCyclesForMemWrite();
       // 			WritePaged(AbsYAddrModeHandler_Address(), Accumulator);
       // 			break;
-      // 		case 0x9a:
-      // 			// TXS
-      // 			StackReg = XReg;
-      // 			break;
+      case 0x9a:
+        // TXS
+        StackReg = XReg;
+        break;
       // 		case 0x9b:
       // 			// Undocumented instruction: TAS abs,Y
       // 			WritePaged(AbsYAddrModeHandler_Address(), Accumulator & XReg);
@@ -1805,10 +1817,10 @@ export function Exec6502Instruction() {
       // 			// LDA (zp,X)
       // 			LDAInstrHandler(IndXAddrModeHandler_Data());
       // 			break;
-      // 		case 0xa2:
-      // 			// LDX imm
-      // 			LDXInstrHandler(ReadPaged(ProgramCounter++));
-      // 			break;
+      case 0xa2:
+        // LDX imm
+        LDXInstrHandler(ReadPaged(ProgramCounter++));
+        break;
       // 		case 0xa3:
       // 			// Undocumented instruction: LAX (zp,X)
       // 			LDAInstrHandler(IndXAddrModeHandler_Data());
@@ -1833,11 +1845,11 @@ export function Exec6502Instruction() {
       // 				XReg = Accumulator;
       // 			}
       // 			break;
-      // 		case 0xa8:
-      // 			// TAY
-      // 			YReg = Accumulator;
-      // 			SetPSRZN(Accumulator);
-      // 			break;
+      case 0xa8:
+        // TAY
+        YReg = Accumulator;
+        SetPSRZN(Accumulator);
+        break;
       case 0xa9:
         // LDA imm
         LDAInstrHandler(ReadPaged(ProgramCounter++));
@@ -1856,10 +1868,10 @@ export function Exec6502Instruction() {
       // 			// LDY abs
       // 			LDYInstrHandler(AbsAddrModeHandler_Data());
       // 			break;
-      // 		case 0xad:
-      // 			// LDA abs
-      // 			LDAInstrHandler(AbsAddrModeHandler_Data());
-      // 			break;
+      case 0xad:
+        // LDA abs
+        LDAInstrHandler(AbsAddrModeHandler_Data());
+        break;
       // 		case 0xae:
       // 			// LDX abs
       // 			LDXInstrHandler(AbsAddrModeHandler_Data());
@@ -1958,10 +1970,10 @@ export function Exec6502Instruction() {
       // 			// CPY zp
       // 			CPYInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
       // 			break;
-      // 		case 0xc5:
-      // 			// CMP zp
-      // 			CMPInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
-      // 			break;
+      case 0xc5:
+        // CMP zp
+        CMPInstrHandler(BEEBREADMEM_DIRECT(ReadPaged(ProgramCounter++)));
+        break;
       // 		case 0xc6:
       // 			// DEC zp
       // 			DECInstrHandler(ZeroPgAddrModeHandler_Address());
@@ -1973,12 +1985,12 @@ export function Exec6502Instruction() {
       // 				CMPInstrHandler(WholeRam[ZeroPageAddress]);
       // 			}
       // 			break;
-      // 		case 0xc8:
-      // 			// INY
-      // 			YReg += 1;
-      // 			YReg &= 255;
-      // 			SetPSRZN(YReg);
-      // 			break;
+      case 0xc8:
+        // INY
+        YReg += 1;
+        YReg &= 255;
+        SetPSRZN(YReg);
+        break;
       // 		case 0xc9:
       // 			// CMP imm
       // 			CMPInstrHandler(ReadPaged(ProgramCounter++));
@@ -2016,10 +2028,10 @@ export function Exec6502Instruction() {
       // 				CMPInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0xd0:
-      // 			// BNE rel
-      // 			BNEInstrHandler();
-      // 			break;
+      case 0xd0:
+        // BNE rel
+        BNEInstrHandler();
+        break;
       // 		case 0xd1:
       // 			// CMP (zp),Y
       // 			CMPInstrHandler(IndYAddrModeHandler_Data());
@@ -2050,10 +2062,10 @@ export function Exec6502Instruction() {
       // 				CMPInstrHandler(WholeRam[ZeroPageAddress]);
       // 			}
       // 			break;
-      // 		case 0xd8:
-      // 			// CLD
-      // 			PSR &= 255 - FlagD;
-      // 			break;
+      case 0xd8:
+        // CLD
+        PSR &= 255 - FlagD;
+        break;
       // 		case 0xd9:
       // 			// CMP abs,Y
       // 			CMPInstrHandler(AbsYAddrModeHandler_Data());
@@ -2156,10 +2168,10 @@ export function Exec6502Instruction() {
       // 				SBCInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0xf0:
-      // 			// BEQ rel
-      // 			BEQInstrHandler();
-      // 			break;
+      case 0xf0:
+        // BEQ rel
+        BEQInstrHandler();
+        break;
       // 		case 0xf1:
       // 			// SBC (zp),Y
       // 			SBCInstrHandler(IndYAddrModeHandler_Data());
@@ -2227,24 +2239,24 @@ export function Exec6502Instruction() {
         throw `not impl: ${CurrentInstruction.toString(16)}`;
     }
 
-    // 	// This block corrects the cycle count for the branch instructions
-    // 	if ((CurrentInstruction == 0x10) ||
-    // 	    (CurrentInstruction == 0x30) ||
-    // 	    (CurrentInstruction == 0x50) ||
-    // 	    (CurrentInstruction == 0x70) ||
-    // 	    (CurrentInstruction == 0x90) ||
-    // 	    (CurrentInstruction == 0xb0) ||
-    // 	    (CurrentInstruction == 0xd0) ||
-    // 	    (CurrentInstruction == 0xf0))
-    // 	{
-    // 		if (Branched)
-    // 		{
-    // 			Cycles++;
-    // 			if ((ProgramCounter & 0xff00) != ((OldPC+2) & 0xff00)) {
-    // 				Cycles++;
-    // 			}
-    // 		}
-    // 	}
+    // This block corrects the cycle count for the branch instructions
+    if (
+      // CurrentInstruction == 0x10 ||
+      // CurrentInstruction == 0x30 ||
+      // CurrentInstruction == 0x50 ||
+      // CurrentInstruction == 0x70 ||
+      // CurrentInstruction == 0x90 ||
+      // CurrentInstruction == 0xb0 ||
+      CurrentInstruction == 0xd0 ||
+      CurrentInstruction == 0xf0
+    ) {
+      if (Branched) {
+        Cycles++;
+        if ((ProgramCounter & 0xff00) != ((OldPC + 2) & 0xff00)) {
+          Cycles++;
+        }
+      }
+    }
 
     Cycles +=
       CyclesTable[CurrentInstruction] -

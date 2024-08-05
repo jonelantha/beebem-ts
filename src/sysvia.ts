@@ -423,109 +423,94 @@ function UpdateIFRTopBit() {
 
 // Address is in the range 0-f - with the fe40 stripped out
 
-// unsigned char SysVIARead(int Address)
-// {
-//   unsigned char tmp = 0xff;
-
-//   // DebugTrace("SysVIARead: Address=0x%02x at %d\n", Address, TotalCycles);
-
-//   switch (Address) {
-//     case 0: /* IRB read */
-// 	  // Clear bit 4 of IFR from ATOD Conversion
-//       SysVIAState.ifr&=~16;
-//       tmp=SysVIAState.orb & SysVIAState.ddrb;
-//       //!JoystickButton[1])
-//         tmp |= 32;
-//       //!JoystickButton[0])
-//         tmp |= 16;
-
-//       tmp |= 192; /* Speech system non existant */
-//       UpdateIFRTopBit();
-//       break;
-
-//     case 2:
-//       tmp = SysVIAState.ddrb;
-//       break;
-
-//     case 3:
-//       tmp = SysVIAState.ddra;
-//       break;
-
-//     case 4: /* Timer 1 lo counter */
-//       if (SysVIAState.timer1c < 0)
-//         tmp=0xff;
-//       else
-//         tmp=(SysVIAState.timer1c / 2) & 0xff;
-//       SysVIAState.ifr&=0xbf; /* Clear bit 6 - timer 1 */
-//       UpdateIFRTopBit();
-//       break;
-
-//     case 5: /* Timer 1 hi counter */
-//       tmp=(SysVIAState.timer1c>>9) & 0xff; //K.Lowe
-//       break;
-
-//     case 6: /* Timer 1 lo latch */
-//       tmp = SysVIAState.timer1l & 0xff;
-//       break;
-
-//     case 7: /* Timer 1 hi latch */
-//       tmp = (SysVIAState.timer1l>>8) & 0xff; //K.Lowe
-//       break;
-
-//     case 8: /* Timer 2 lo counter */
-//       if (SysVIAState.timer2c < 0) /* Adjust for dividing -ve count by 2 */
-//         tmp=((SysVIAState.timer2c - 1) / 2) & 0xff;
-//       else
-//         tmp=(SysVIAState.timer2c / 2) & 0xff;
-//       SysVIAState.ifr&=0xdf; /* Clear bit 5 - timer 2 */
-//       UpdateIFRTopBit();
-//       break;
-
-//     case 9: /* Timer 2 hi counter */
-//       tmp = (SysVIAState.timer2c>>9) & 0xff; //K.Lowe
-//       break;
-
-//     case 10:
-//       tmp = SRData;
-//       break;
-
-//     case 11:
-//       tmp = SysVIAState.acr;
-//       break;
-
-//     case 12:
-//       tmp = SysVIAState.pcr;
-//       break;
-
-//     case 13:
-//       UpdateIFRTopBit();
-// #ifdef KBDDEBUG
-//       // DebugTrace("Read IFR got=0x%02x\n", SysVIAState.ifr);
-// #endif
-//       tmp = SysVIAState.ifr;
-//       break;
-
-//     case 14:
-//       tmp = SysVIAState.ier | 0x80;
-//       break;
-
-//     case 1:
-//       SysVIAState.ifr&=0xfc;
-//       UpdateIFRTopBit();
-//     case 15:
-//       /* slow data bus read */
-//       tmp = SlowDataBusRead();
-//       break;
-//   } /* Address switch */
-
-//   if (DebugEnabled)
-//   {
-//     DebugDisplayTraceF(DebugType::SysVIA, "SysVia: Read address %X value %02X",
-//                        Address & 0xf, tmp & 0xff);
-//   }
-
-//   return tmp;
-// }
+/**
+ * @param Address int
+ */
+export function SysVIARead(Address: number) {
+  let tmp = 0xff; // unsigned char
+  //   // DebugTrace("SysVIARead: Address=0x%02x at %d\n", Address, TotalCycles);
+  switch (Address) {
+    //     case 0: /* IRB read */
+    // 	  // Clear bit 4 of IFR from ATOD Conversion
+    //       SysVIAState.ifr&=~16;
+    //       tmp=SysVIAState.orb & SysVIAState.ddrb;
+    //       //!JoystickButton[1])
+    //         tmp |= 32;
+    //       //!JoystickButton[0])
+    //         tmp |= 16;
+    //       tmp |= 192; /* Speech system non existant */
+    //       UpdateIFRTopBit();
+    //       break;
+    //     case 2:
+    //       tmp = SysVIAState.ddrb;
+    //       break;
+    //     case 3:
+    //       tmp = SysVIAState.ddra;
+    //       break;
+    //     case 4: /* Timer 1 lo counter */
+    //       if (SysVIAState.timer1c < 0)
+    //         tmp=0xff;
+    //       else
+    //         tmp=(SysVIAState.timer1c / 2) & 0xff;
+    //       SysVIAState.ifr&=0xbf; /* Clear bit 6 - timer 1 */
+    //       UpdateIFRTopBit();
+    //       break;
+    //     case 5: /* Timer 1 hi counter */
+    //       tmp=(SysVIAState.timer1c>>9) & 0xff; //K.Lowe
+    //       break;
+    //     case 6: /* Timer 1 lo latch */
+    //       tmp = SysVIAState.timer1l & 0xff;
+    //       break;
+    //     case 7: /* Timer 1 hi latch */
+    //       tmp = (SysVIAState.timer1l>>8) & 0xff; //K.Lowe
+    //       break;
+    //     case 8: /* Timer 2 lo counter */
+    //       if (SysVIAState.timer2c < 0) /* Adjust for dividing -ve count by 2 */
+    //         tmp=((SysVIAState.timer2c - 1) / 2) & 0xff;
+    //       else
+    //         tmp=(SysVIAState.timer2c / 2) & 0xff;
+    //       SysVIAState.ifr&=0xdf; /* Clear bit 5 - timer 2 */
+    //       UpdateIFRTopBit();
+    //       break;
+    //     case 9: /* Timer 2 hi counter */
+    //       tmp = (SysVIAState.timer2c>>9) & 0xff; //K.Lowe
+    //       break;
+    //     case 10:
+    //       tmp = SRData;
+    //       break;
+    //     case 11:
+    //       tmp = SysVIAState.acr;
+    //       break;
+    //     case 12:
+    //       tmp = SysVIAState.pcr;
+    //       break;
+    //     case 13:
+    //       UpdateIFRTopBit();
+    // #ifdef KBDDEBUG
+    //       // DebugTrace("Read IFR got=0x%02x\n", SysVIAState.ifr);
+    // #endif
+    //       tmp = SysVIAState.ifr;
+    //       break;
+    case 14:
+      tmp = SysVIAState.ier | 0x80;
+      break;
+    //     case 1:
+    //       SysVIAState.ifr&=0xfc;
+    //       UpdateIFRTopBit();
+    //     case 15:
+    //       /* slow data bus read */
+    //       tmp = SlowDataBusRead();
+    //       break;
+    default:
+      throw "not impl";
+  } /* Address switch */
+  //   if (DebugEnabled)
+  //   {
+  //     DebugDisplayTraceF(DebugType::SysVIA, "SysVia: Read address %X value %02X",
+  //                        Address & 0xf, tmp & 0xff);
+  //   }
+  return tmp;
+}
 
 /*--------------------------------------------------------------------------*/
 /* Value denotes the new value - i.e. 1 for a rising edge */
