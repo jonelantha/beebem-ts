@@ -97,15 +97,13 @@ export const getIC32State = () => IC32State;
 // static bool OldCMOSState = false;
 
 /*--------------------------------------------------------------------------*/
-// static void UpdateIFRTopBit(void) {
-//   /* Update top bit of IFR */
-//   if (SysVIAState.ifr&(SysVIAState.ier&0x7f))
-//     SysVIAState.ifr|=0x80;
-//   else
-//     SysVIAState.ifr&=0x7f;
-//   intStatus&=~(1<<sysVia);
-//   intStatus|=((SysVIAState.ifr & 128)?(1<<sysVia):0);
-// }
+function UpdateIFRTopBit() {
+  /* Update top bit of IFR */
+  if (SysVIAState.ifr & (SysVIAState.ier & 0x7f)) SysVIAState.ifr |= 0x80;
+  else SysVIAState.ifr &= 0x7f;
+  setIntStatus(getIntStatus() & ~(1 << IRQ_sysVia));
+  setIntStatus(getIntStatus() | (SysVIAState.ifr & 128) ? 1 << IRQ_sysVia : 0);
+}
 
 // void PulseSysViaCB1(void) {
 // /// Set IFR bit 4 - AtoD end of conversion interrupt
@@ -531,15 +529,18 @@ export const getIC32State = () => IC32State;
 
 /*--------------------------------------------------------------------------*/
 /* Value denotes the new value - i.e. 1 for a rising edge */
-// void SysVIATriggerCA1Int(int value) {
-//   /*value^=1; */
-//   // DebugTrace("SysVIATriggerCA1Int at %d\n", TotalCycles);
-//   /* Cause interrupt on appropriate edge */
-//   if (!((SysVIAState.pcr & 1) ^ value)) {
-//     SysVIAState.ifr|=2; /* CA1 */
-//     UpdateIFRTopBit();
-//   }
-// }
+/**
+ * @param value // int
+ */
+export function SysVIATriggerCA1Int(value: number) {
+  /*value^=1; */
+  // DebugTrace("SysVIATriggerCA1Int at %d\n", TotalCycles);
+  /* Cause interrupt on appropriate edge */
+  if (!((SysVIAState.pcr & 1) ^ value)) {
+    SysVIAState.ifr |= 2; /* CA1 */
+    UpdateIFRTopBit();
+  }
+}
 
 /*--------------------------------------------------------------------------*/
 function SysVIA_poll_real() {

@@ -39,6 +39,7 @@ import {
   write8UChars,
   write16UChars,
 } from "./beebwinh";
+import { SysVIATriggerCA1Int } from "./sysvia";
 
 // from header
 
@@ -1042,7 +1043,7 @@ export function VideoDoScanLine() {
   const screen = getScreen();
   if (VideoState.IsTeletext) {
     if (VideoState.DoCA1Int) {
-      //SysVIATriggerCA1Int(0);
+      SysVIATriggerCA1Int(0);
       VideoState.DoCA1Int = false;
     }
 
@@ -1112,7 +1113,7 @@ export function VideoDoScanLine() {
       sleepTime = VideoStartOfFrame();
       VideoState.PreviousLastPixmapLine = VideoState.PixmapLine;
       VideoState.PixmapLine = 0;
-      //SysVIATriggerCA1Int(1);
+      SysVIATriggerCA1Int(1);
       VideoState.DoCA1Int = true;
     } else {
       // RTW- set timer till the next scanline update (this is now nice and simple)
@@ -1129,7 +1130,7 @@ export function VideoDoScanLine() {
     // i.e. we can catch it before the line counters are incremented
     if (VideoState.VSyncState) {
       if (!--VideoState.VSyncState) {
-        //SysVIATriggerCA1Int(0);
+        SysVIATriggerCA1Int(0);
       }
     }
 
@@ -1148,7 +1149,7 @@ export function VideoDoScanLine() {
       VideoState.PixmapLine = 0;
       VideoState.IsNewTVFrame = true;
 
-      //SysVIATriggerCA1Int(1);
+      SysVIATriggerCA1Int(1);
       VideoState.VSyncState = CRTC_SyncWidth >> 4;
     }
 
