@@ -33,6 +33,8 @@ import { getTotalCycles } from "./6502core";
 import { BeebMemInit } from "./beebmem";
 import { bufferHeight, bufferWidth, InitSurfaces } from "./beebwindx";
 import { REAL_TIME_TARGET } from "./beebwinh";
+import { SysVIAReset } from "./sysvia";
+import { UserVIAReset } from "./uservia";
 import { BuildMode7Font, VideoInit } from "./video";
 
 export const primaryWidth = 640;
@@ -72,6 +74,8 @@ async function ResetBeebSystem(LoadRoms: boolean) {
   await BeebMemInit(LoadRoms);
   Init6502core();
 
+  SysVIAReset();
+  UserVIAReset();
   VideoInit();
 }
 

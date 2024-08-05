@@ -24,6 +24,13 @@ import { VideoPoll } from "./video";
 
 // header
 
+export const IRQ_sysVia = 0;
+export const IRQ_userVia = 1;
+export const IRQ_serial = 2;
+export const IRQ_tube = 3;
+export const IRQ_teletext = 4;
+export const IRQ_hdc = 5;
+
 const FlagC = 1;
 const FlagZ = 2;
 const FlagI = 4;
@@ -32,20 +39,40 @@ const FlagB = 16;
 const FlagV = 64;
 const FlagN = 128;
 
+const NO_TIMER_INT_DUE = -1000000;
+
+export const CycleCountTMax = 2147483647;
+export const CycleCountWrap = 2147483647 / 2;
+
 export const SetTrigger = (after: number) => TotalCycles + after;
 export const IncTrigger = (after: number, trigger: number) => trigger + after;
+
+export const ClearTrigger = () => CycleCountTMax;
 
 // main
 
 let CurrentInstruction = -1;
 
 let TotalCycles = 0;
+export const getTotalCycles = () => TotalCycles;
 
 let ProgramCounter: number; // int
 let Accumulator: number, XReg: number, YReg: number; // int
 let StackReg: number, PSR: number; // unsigned char
+let IRQCycles: number; // unsigned char
 
-export const getTotalCycles = () => TotalCycles;
+let intStatus = 0; /* unsigned char, bit set (nums in IRQ_Nums) if interrupt being caused */
+export const setIntStatus = (val: number) => (intStatus = val);
+export const getIntStatus = () => intStatus;
+
+/* Note how GETCFLAG is special since being bit 0 we don't need to test it to get a clean 0/1 */
+const GETCFLAG = () => (PSR & FlagC) > 0;
+const GETZFLAG = () => (PSR & FlagZ) > 0;
+const GETIFLAG = () => (PSR & FlagI) > 0;
+const GETDFLAG = () => (PSR & FlagD) > 0;
+const GETBFLAG = () => (PSR & FlagB) > 0;
+const GETVFLAG = () => (PSR & FlagV) > 0;
+const GETNFLAG = () => (PSR & FlagN) > 0;
 
 // prettier-ignore
 const CyclesTable = [
@@ -116,6 +143,29 @@ const CyclesToMemWrite = [
    allow fernangling by memory subsystem */
 let Cycles: number; // unsigned int
 
+/* Number of cycles VIAs advanced for mem read and writes */
+let ViaCycles: number; // unsigned int
+
+/* Number of additional cycles for IO read / writes */
+let IOCycles = 0; // int
+
+/* Flag indicating if an interrupt is due */
+let IntDue = false;
+
+/* When a timer interrupt is due this is the number of cycles
+   to it (usually -ve) */
+let CyclesToInt = NO_TIMER_INT_DUE; // int
+
+// static bool Branched; // true if the instruction branched
+// // 1 if first cycle happened
+
+// Get a two byte address from the program counter, and then post inc
+// the program counter
+function GETTWOBYTEFROMPC() {
+  return ReadPaged(ProgramCounter++) | (ReadPaged(ProgramCounter++) << 8);
+}
+
+const WritePaged = BeebWriteMem;
 const ReadPaged = BeebReadMem;
 
 /*----------------------------------------------------------------------------*/
@@ -148,22 +198,17 @@ const ReadPaged = BeebReadMem;
 // }
 
 /*----------------------------------------------------------------------------*/
-// void DoIntCheck(void)
-// {
-// 	if (!IntDue)
-// 	{
-// 		IntDue = (intStatus != 0);
-// 		if (!IntDue)
-// 		{
-// 			CyclesToInt = NO_TIMER_INT_DUE;
-// 		}
-// 		else if (CyclesToInt == NO_TIMER_INT_DUE)
-// 		{
-// 			// Non-timer interrupt has occurred
-// 			CyclesToInt = 0;
-// 		}
-// 	}
-// }
+function DoIntCheck() {
+  if (!IntDue) {
+    IntDue = intStatus != 0;
+    if (!IntDue) {
+      CyclesToInt = NO_TIMER_INT_DUE;
+    } else if (CyclesToInt == NO_TIMER_INT_DUE) {
+      // Non-timer interrupt has occurred
+      CyclesToInt = 0;
+    }
+  }
+}
 /*----------------------------------------------------------------------------*/
 
 // IO read + write take extra cycle & require sync with 1MHz clock (taken
@@ -215,14 +260,13 @@ const ReadPaged = BeebReadMem;
 // 	}
 // }
 
-// static void AdvanceCyclesForMemWrite()
-// {
-// 	// Advance VIAs to point where mem write happens
-// 	Cycles += CyclesToMemWrite[CurrentInstruction];
-// 	PollVIAs(CyclesToMemWrite[CurrentInstruction]);
+function AdvanceCyclesForMemWrite() {
+  // Advance VIAs to point where mem write happens
+  Cycles += CyclesToMemWrite[CurrentInstruction];
+  PollVIAs(CyclesToMemWrite[CurrentInstruction]);
 
-// 	DoIntCheck();
-// }
+  DoIntCheck();
+}
 
 /*----------------------------------------------------------------------------*/
 /* Set the Z flag if 'in' is 0, and N if bit 7 is set - leave all other bits  */
@@ -234,10 +278,19 @@ function SetPSRZN(inOperand: number) {
 
 /*----------------------------------------------------------------------------*/
 /* Note: n is 128 for true - not 1                                            */
-// INLINE static void SetPSR(int mask,int c,int z,int i,int d,int b, int v, int n) {
-//   PSR&=~mask;
-//   PSR|=c | (z<<1) | (i<<2) | (d<<3) | (b<<4) | (v<<6) | n;
-// } /* SetPSR */
+function SetPSR(
+  mask: number,
+  c: 0 | 1,
+  z: 0 | 1,
+  i: 0 | 1,
+  d: 0 | 1,
+  b: 0 | 1,
+  v: 0 | 1,
+  n: 0 | 128,
+) {
+  PSR &= ~mask;
+  PSR |= c | (z << 1) | (i << 2) | (d << 3) | (b << 4) | (v << 6) | n;
+} /* SetPSR */
 
 /*----------------------------------------------------------------------------*/
 /* NOTE!!!!! n is 128 or 0 - not 1 or 0                                       */
@@ -247,10 +300,13 @@ function SetPSRZN(inOperand: number) {
 // } /* SetPSRCZN */
 
 /*----------------------------------------------------------------------------*/
-// INLINE static void Push(unsigned char ToPush) {
-//   BEEBWRITEMEM_DIRECT(0x100+StackReg,ToPush);
-//   StackReg--;
-// } /* Push */
+/**
+ * @param ToPush // unsigned char
+ */
+function Push(ToPush: number) {
+  BEEBWRITEMEM_DIRECT(0x100 + StackReg, ToPush);
+  StackReg--;
+} /* Push */
 
 /*----------------------------------------------------------------------------*/
 // INLINE static unsigned char Pop(void) {
@@ -259,11 +315,13 @@ function SetPSRZN(inOperand: number) {
 // } /* Pop */
 
 /*----------------------------------------------------------------------------*/
-// INLINE static void PushWord(int topush)
-// {
-//   Push((topush>>8) & 255);
-//   Push(topush & 255);
-// }
+/**
+ * @param topush int
+ */
+function PushWord(topush: number) {
+  Push((topush >> 8) & 255);
+  Push(topush & 255);
+}
 
 /*----------------------------------------------------------------------------*/
 // INLINE static int PopWord() {
@@ -724,15 +782,13 @@ function LDAInstrHandler(operand: number) {
 
 /*-------------------------------------------------------------------------*/
 /* Absolute  addressing mode handler                                       */
-// INLINE static int AbsAddrModeHandler_Address()
-// {
-//   /* Get the address from after the instruction */
-//   int FullAddress;
-//   GETTWOBYTEFROMPC(FullAddress);
+function AbsAddrModeHandler_Address() {
+  /* Get the address from after the instruction */
+  const FullAddress = GETTWOBYTEFROMPC();
 
-//   /* And then read it */
-//   return(FullAddress);
-// }
+  /* And then read it */
+  return FullAddress;
+}
 
 /*-------------------------------------------------------------------------*/
 /* Zero page addressing mode handler                                       */
@@ -905,18 +961,37 @@ export function Init6502core() {
   StackReg = 0xff; // Initial value?
   PSR = FlagI; // Interrupts off for starters
 
-  // intStatus = 0;
+  intStatus = 0;
   // NMIStatus = 0;
   // NMILock = false;
 }
+
+/*-------------------------------------------------------------------------*/
+function DoInterrupt() {
+  PushWord(ProgramCounter);
+  Push(PSR & ~FlagB);
+  ProgramCounter = BeebReadMem(0xfffe) | (BeebReadMem(0xffff) << 8);
+  SetPSR(FlagI, 0, 0, 1, 0, 0, 0, 0);
+  IRQCycles = 7;
+} /* DoInterrupt */
+
+/*-------------------------------------------------------------------------*/
+// void DoNMI(void) {
+//   NMILock = true;
+//   PushWord(ProgramCounter);
+//   Push(PSR);
+//   ProgramCounter=BeebReadMem(0xfffa) | (BeebReadMem(0xfffb)<<8);
+//   SetPSR(FlagI,0,0,1,0,0,0,0); /* Normal interrupts should be disabled during NMI ? */
+//   IRQCycles=7;
+// } /* DoNMI */
 
 /*-------------------------------------------------------------------------*/
 /* Execute one 6502 instruction, move program counter on                   */
 export function Exec6502Instruction() {
   // static unsigned char OldNMIStatus;
   // int OldPC;
-  // bool iFlagJustCleared;
-  // bool iFlagJustSet;
+  let iFlagJustCleared = false;
+  let iFlagJustSet = false;
 
   const Count = 1024; //DebugEnabled ? 1 : 1024; // Makes debug window more responsive
 
@@ -934,11 +1009,11 @@ export function Exec6502Instruction() {
     // 	}
 
     // 	Branched = false;
-    // 	iFlagJustCleared = false;
-    // 	iFlagJustSet = false;
+    iFlagJustCleared = false;
+    iFlagJustSet = false;
     Cycles = 0;
-    // 	IOCycles = 0;
-    // 	IntDue = false;
+    IOCycles = 0;
+    IntDue = false;
     CurrentInstruction = -1;
 
     // 	OldPC = ProgramCounter;
@@ -950,7 +1025,7 @@ export function Exec6502Instruction() {
     }
 
     // 	// Advance VIAs to point where mem read happens
-    // 	ViaCycles=0;
+    ViaCycles = 0;
     // 	AdvanceCyclesForMemRead();
 
     switch (CurrentInstruction) {
@@ -1627,11 +1702,11 @@ export function Exec6502Instruction() {
       // 			AdvanceCyclesForMemWrite();
       // 			STYInstrHandler(AbsAddrModeHandler_Address());
       // 			break;
-      // 		case 0x8d:
-      // 			// STA abs
-      // 			AdvanceCyclesForMemWrite();
-      // 			WritePaged(AbsAddrModeHandler_Address(), Accumulator);
-      // 			break;
+      case 0x8d:
+        // STA abs
+        AdvanceCyclesForMemWrite();
+        WritePaged(AbsAddrModeHandler_Address(), Accumulator);
+        break;
       // 		case 0x8e:
       // 			// STX abs
       // 			AdvanceCyclesForMemWrite();
@@ -2176,23 +2251,27 @@ export function Exec6502Instruction() {
       CyclesToMemRead[CurrentInstruction] -
       CyclesToMemWrite[CurrentInstruction];
 
-    //PollVIAs(Cycles - ViaCycles);
+    PollVIAs(Cycles - ViaCycles);
     const sleepTime = PollHardware(Cycles);
 
     // Check for anything time critical [ ]
 
     // Check for IRQ
-    // DoIntCheck();
-    // if (IntDue && (!GETIFLAG || iFlagJustSet) &&
-    // 	(CyclesToInt <= (-2-IOCycles) && !iFlagJustCleared))
-    // {
-    // 	// Int noticed 2 cycles before end of instruction - interrupt now
-    // 	CyclesToInt = NO_TIMER_INT_DUE;
-    // 	DoInterrupt();
-    // 	PollHardware(IRQCycles);
-    // 	PollVIAs(IRQCycles);
-    // 	IRQCycles=0;
-    // }
+    DoIntCheck();
+    if (
+      IntDue &&
+      (!GETIFLAG() || iFlagJustSet) &&
+      CyclesToInt <= -2 - IOCycles &&
+      !iFlagJustCleared
+    ) {
+      throw "not impl";
+      // Int noticed 2 cycles before end of instruction - interrupt now
+      CyclesToInt = NO_TIMER_INT_DUE;
+      DoInterrupt();
+      PollHardware(IRQCycles);
+      PollVIAs(IRQCycles);
+      IRQCycles = 0;
+    }
 
     // Check for NMI
     // if ((NMIStatus && !OldNMIStatus) || (NMIStatus & 1<<nmi_econet))
@@ -2208,8 +2287,6 @@ export function Exec6502Instruction() {
     if (sleepTime) return sleepTime;
   }
 }
-
-const CycleCountWrap = Number.MAX_SAFE_INTEGER / 2;
 
 /**
  * @param nCycles unsigned int
@@ -2239,4 +2316,18 @@ function PollHardware(nCycles: number) {
 
   //   if (DisplayCycles > 0) DisplayCycles -= nCycles; // Countdown time till end of display of info.
   return sleepTime;
+}
+
+/**
+ * @param nCycles unsigned int
+ */
+function PollVIAs(nCycles: number) {
+  if (nCycles != 0) {
+    if (CyclesToInt != NO_TIMER_INT_DUE) CyclesToInt -= nCycles;
+
+    SysVIA_poll(nCycles);
+    UserVIA_poll(nCycles);
+
+    ViaCycles += nCycles;
+  }
 }

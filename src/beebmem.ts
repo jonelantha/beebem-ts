@@ -29,6 +29,10 @@ Boston, MA  02110-1301, USA.
 import { getIC32State } from "./sysvia";
 import { VideoULARead, VideoULAWrite } from "./video";
 
+export function BEEBWRITEMEM_DIRECT(Address: number, Value: number) {
+  WholeRam[Address] = Value;
+}
+
 const WholeRam = new Uint8Array(0x10000);
 export const getWholeRam = () => WholeRam;
 const Roms = Array.from({ length: 16 }, () => new Uint8Array(0x4000));

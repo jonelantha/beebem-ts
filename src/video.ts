@@ -134,7 +134,7 @@ type VideoState = {
   DoCA1Int: boolean;
 };
 
-let VideoState: VideoState = {
+const VideoState: VideoState = {
   Addr: 0,
   StartAddr: 0,
   PixmapLine: 0,
