@@ -25,6 +25,14 @@ Boston, MA  02110-1301, USA.
 keyboard emulation - David Alan Gilbert 30/10/94 */
 /* CMOS Ram finalised 06/01/2001 - Richard Gellman */
 
+import {
+  getCyclesToInt,
+  getIntStatus,
+  IRQ_sysVia,
+  NO_TIMER_INT_DUE,
+  setCyclesToInt,
+  setIntStatus,
+} from "./6502core";
 import { VIAReset, VIAState } from "./via";
 
 // header
@@ -528,47 +536,45 @@ export function SysVIATriggerCA1Int(value: number) {
 }
 
 /*--------------------------------------------------------------------------*/
+let t1int = false;
 function SysVIA_poll_real() {
-  throw "not impl";
-  //   static bool t1int=false;
+  if (SysVIAState.timer1c < -2 && !t1int) {
+    t1int = true;
+    if (!SysVIAState.timer1hasshot || SysVIAState.acr & 0x40) {
+      // DebugTrace("SysVia timer1 int at %d\n", TotalCycles);
+      SysVIAState.ifr |= 0x40; /* Timer 1 interrupt */
+      UpdateIFRTopBit();
+      if (SysVIAState.acr & 0x80) {
+        SysVIAState.orb ^= 0x80; /* Toggle PB7 */
+        SysVIAState.irb ^= 0x80; /* Toggle PB7 */
+      }
+      if (SysVIAState.ier & 0x40 && getCyclesToInt() == NO_TIMER_INT_DUE) {
+        setCyclesToInt(3 + SysVIAState.timer1c);
+      }
+      SysVIAState.timer1hasshot = true;
+    }
+  }
 
-  //   if (SysVIAState.timer1c<-2 && !t1int) {
-  //     t1int=true;
-  //     if (!SysVIAState.timer1hasshot || (SysVIAState.acr & 0x40)) {
-  //       // DebugTrace("SysVia timer1 int at %d\n", TotalCycles);
-  //       SysVIAState.ifr|=0x40; /* Timer 1 interrupt */
-  //       UpdateIFRTopBit();
-  //       if (SysVIAState.acr & 0x80) {
-  //         SysVIAState.orb^=0x80; /* Toggle PB7 */
-  //         SysVIAState.irb^=0x80; /* Toggle PB7 */
-  //       }
-  //       if ((SysVIAState.ier & 0x40) && CyclesToInt == NO_TIMER_INT_DUE) {
-  //           CyclesToInt = 3 + SysVIAState.timer1c;
-  //       }
-  //       SysVIAState.timer1hasshot = true;
-  //     }
-  //   }
+  if (SysVIAState.timer1c < -3) {
+    SysVIAState.timer1c += SysVIAState.timer1l * 2 + 4;
+    t1int = false;
+  }
 
-  //   if (SysVIAState.timer1c<-3) {
-  //     SysVIAState.timer1c += (SysVIAState.timer1l * 2) + 4;
-  //     t1int=false;
-  //   }
+  if (SysVIAState.timer2c < -2) {
+    if (!SysVIAState.timer2hasshot) {
+      // DebugTrace("SysVia timer2 int at %d\n", TotalCycles);
+      SysVIAState.ifr |= 0x20; /* Timer 2 interrupt */
+      UpdateIFRTopBit();
+      if (SysVIAState.ier & 0x20 && getCyclesToInt() == NO_TIMER_INT_DUE) {
+        setCyclesToInt(3 + SysVIAState.timer2c);
+      }
+      SysVIAState.timer2hasshot = true;
+    }
+  }
 
-  //   if (SysVIAState.timer2c<-2) {
-  //     if (!SysVIAState.timer2hasshot) {
-  //       // DebugTrace("SysVia timer2 int at %d\n", TotalCycles);
-  //       SysVIAState.ifr|=0x20; /* Timer 2 interrupt */
-  //       UpdateIFRTopBit();
-  //       if ((SysVIAState.ier & 0x20) && CyclesToInt == NO_TIMER_INT_DUE) {
-  //         CyclesToInt = 3 + SysVIAState.timer2c;
-  //       }
-  //       SysVIAState.timer2hasshot = true;
-  //     }
-  //   }
-
-  //   if (SysVIAState.timer2c<-3) {
-  //     SysVIAState.timer2c += 0x20000; // Do not reload latches for T2
-  //   }
+  if (SysVIAState.timer2c < -3) {
+    SysVIAState.timer2c += 0x20000; // Do not reload latches for T2
+  }
 } /* SysVIA_poll */
 
 /**

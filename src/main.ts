@@ -21,7 +21,6 @@ Boston, MA  02110-1301, USA.
 ****************************************************************/
 
 import { tempVideoOverride } from "./video";
-import { tempLoadMemSnapshot } from "./beebmem";
 import { Initialise } from "./beebwin";
 import { Exec6502Instruction } from "./6502core";
 
@@ -64,8 +63,6 @@ if (!memFile) throw "no mem param";
 
 (async function run() {
   await Initialise();
-
-  await tempLoadMemSnapshot(memFile);
 
   const start = performance.now();
 

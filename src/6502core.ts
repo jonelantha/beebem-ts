@@ -47,7 +47,7 @@ const FlagB = 16;
 const FlagV = 64;
 const FlagN = 128;
 
-const NO_TIMER_INT_DUE = -1000000;
+export const NO_TIMER_INT_DUE = -1000000;
 
 export const CycleCountTMax = 2147483647;
 export const CycleCountWrap = 2147483647 / 2;
@@ -56,6 +56,10 @@ export const SetTrigger = (after: number) => TotalCycles + after;
 export const IncTrigger = (after: number, trigger: number) => trigger + after;
 
 export const ClearTrigger = () => CycleCountTMax;
+
+// util
+
+const charToSignedChar = (char: number) => (char & 0xf0 ? char - 0x100 : char);
 
 // main
 
@@ -166,6 +170,8 @@ let IntDue = false;
 /* When a timer interrupt is due this is the number of cycles
    to it (usually -ve) */
 let CyclesToInt = NO_TIMER_INT_DUE; // int
+export const getCyclesToInt = () => CyclesToInt;
+export const setCyclesToInt = (value: number) => (CyclesToInt = value);
 
 let Branched = false; // true if the instruction branched
 // // 1 if first cycle happened
@@ -251,20 +257,20 @@ export function AdjustForIORead() {
 
 /*----------------------------------------------------------------------------*/
 
-// static void AdvanceCyclesForMemRead()
-// {
-// 	// Advance VIAs to point where mem read happens
-// 	Cycles += CyclesToMemRead[CurrentInstruction];
-// 	PollVIAs(CyclesToMemRead[CurrentInstruction]);
+function AdvanceCyclesForMemRead() {
+  // Advance VIAs to point where mem read happens
+  Cycles += CyclesToMemRead[CurrentInstruction];
+  PollVIAs(CyclesToMemRead[CurrentInstruction]);
 
-// 	// Check if interrupt should be taken if instruction does
-// 	// a read but not a write (write instructions checked below).
-// 	if (CyclesToMemRead[CurrentInstruction] != 0 &&
-// 		CyclesToMemWrite[CurrentInstruction] == 0)
-// 	{
-// 		DoIntCheck();
-// 	}
-// }
+  // Check if interrupt should be taken if instruction does
+  // a read but not a write (write instructions checked below).
+  if (
+    CyclesToMemRead[CurrentInstruction] != 0 &&
+    CyclesToMemWrite[CurrentInstruction] == 0
+  ) {
+    DoIntCheck();
+  }
+}
 
 function AdvanceCyclesForMemWrite() {
   // Advance VIAs to point where mem write happens
@@ -343,7 +349,7 @@ function PushWord(topush: number) {
 function RelAddrModeHandler_Data() {
   // For branches - is this correct - i.e. is the program counter incremented
   // at the correct time?
-  let EffectiveAddress = /*(signed char)*/ ReadPaged(ProgramCounter++);
+  let EffectiveAddress = charToSignedChar(ReadPaged(ProgramCounter++));
   EffectiveAddress += ProgramCounter;
 
   return EffectiveAddress;
@@ -468,18 +474,18 @@ function BEQInstrHandler() {
 // } /* BMIInstrHandler */
 
 function BNEInstrHandler() {
-  if (!GETZFLAG) {
+  if (!GETZFLAG()) {
     ProgramCounter = RelAddrModeHandler_Data();
     Branched = true;
   } else ProgramCounter++;
 } /* BNEInstrHandler */
 
-// INLINE static void BPLInstrHandler(void) {
-//   if (!GETNFLAG) {
-//     ProgramCounter=RelAddrModeHandler_Data();
-//     Branched = true;
-//   } else ProgramCounter++;
-// }
+function BPLInstrHandler() {
+  if (!GETNFLAG()) {
+    ProgramCounter = RelAddrModeHandler_Data();
+    Branched = true;
+  } else ProgramCounter++;
+}
 
 // INLINE static void BRKInstrHandler(void) {
 //   PushWord(ProgramCounter+1);
@@ -550,24 +556,26 @@ function CMPInstrHandler(operand: number) {
 //   SetPSRZN(Accumulator);
 // } /* EORInstrHandler */
 
-// INLINE static void INCInstrHandler(int address)
-// {
-//   unsigned char val = ReadPaged(address);
-//   Cycles+=1;
-//   PollVIAs(1);
-//   WritePaged(address,val);
-//   val=(val+1) & 255;
-//   Cycles+=CyclesToMemWrite[CurrentInstruction] - 1;
-//   PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
-//   WritePaged(address,val);
-//   SetPSRZN(val);
-// } /* INCInstrHandler */
+/**
+ * @param address int
+ */
+function INCInstrHandler(address: number) {
+  let val = ReadPaged(address);
+  Cycles += 1;
+  PollVIAs(1);
+  WritePaged(address, val);
+  val = (val + 1) & 255;
+  Cycles += CyclesToMemWrite[CurrentInstruction] - 1;
+  PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
+  WritePaged(address, val);
+  SetPSRZN(val);
+} /* INCInstrHandler */
 
-// INLINE static void INXInstrHandler(void) {
-//   XReg+=1;
-//   XReg&=255;
-//   SetPSRZN(XReg);
-// } /* INXInstrHandler */
+function INXInstrHandler() {
+  XReg += 1;
+  XReg &= 255;
+  SetPSRZN(XReg);
+} /* INXInstrHandler */
 
 // INLINE static void JSRInstrHandler(int address)
 // {
@@ -720,10 +728,12 @@ function LDXInstrHandler(operand: number) {
 //   }
 // } /* SBCInstrHandler */
 
-// INLINE static void STXInstrHandler(int address)
-// {
-//   WritePaged(address,XReg);
-// }
+/**
+ * @param address int
+ */
+function STXInstrHandler(address: number) {
+  WritePaged(address, XReg);
+}
 
 // INLINE static void STYInstrHandler(int address)
 // {
@@ -1036,7 +1046,7 @@ export function Exec6502Instruction() {
 
     // 	// Advance VIAs to point where mem read happens
     ViaCycles = 0;
-    // 	AdvanceCyclesForMemRead();
+    AdvanceCyclesForMemRead();
 
     tempInstCount++;
 
@@ -1120,10 +1130,10 @@ export function Exec6502Instruction() {
       // 				ORAInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0x10:
-      // 			// BPL rel
-      // 			BPLInstrHandler();
-      // 			break;
+      case 0x10:
+        // BPL rel
+        BPLInstrHandler();
+        break;
       // 		case 0x11:
       // 			// ORA (zp),Y
       // 			ORAInstrHandler(IndYAddrModeHandler_Data());
@@ -1719,11 +1729,11 @@ export function Exec6502Instruction() {
         AdvanceCyclesForMemWrite();
         WritePaged(AbsAddrModeHandler_Address(), Accumulator);
         break;
-      // 		case 0x8e:
-      // 			// STX abs
-      // 			AdvanceCyclesForMemWrite();
-      // 			STXInstrHandler(AbsAddrModeHandler_Address());
-      // 			break;
+      case 0x8e:
+        // STX abs
+        AdvanceCyclesForMemWrite();
+        STXInstrHandler(AbsAddrModeHandler_Address());
+        break;
       // 		case 0x8f:
       // 			// Undocumented instruction: SAX abs
       // 			WritePaged(AbsAddrModeHandler_Address(), Accumulator & XReg);
@@ -2123,10 +2133,10 @@ export function Exec6502Instruction() {
       // 			// SBC zp
       // 			SBCInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
       // 			break;
-      // 		case 0xe6:
-      // 			// INC zp
-      // 			INCInstrHandler(ZeroPgAddrModeHandler_Address());
-      // 			break;
+      case 0xe6:
+        // INC zp
+        INCInstrHandler(ZeroPgAddrModeHandler_Address());
+        break;
       // 		case 0xe7: {
       // 				// Undocumented instruction: ISC zp
       // 				int ZeroPageAddress = ZeroPgAddrModeHandler_Address();
@@ -2134,10 +2144,10 @@ export function Exec6502Instruction() {
       // 				SBCInstrHandler(WholeRam[ZeroPageAddress]);
       // 			}
       // 			break;
-      // 		case 0xe8:
-      // 			// INX
-      // 			INXInstrHandler();
-      // 			break;
+      case 0xe8:
+        // INX
+        INXInstrHandler();
+        break;
       // 		case 0xe9:
       // 			// SBC imm
       // 			SBCInstrHandler(ReadPaged(ProgramCounter++));
@@ -2241,7 +2251,7 @@ export function Exec6502Instruction() {
 
     // This block corrects the cycle count for the branch instructions
     if (
-      // CurrentInstruction == 0x10 ||
+      CurrentInstruction == 0x10 ||
       // CurrentInstruction == 0x30 ||
       // CurrentInstruction == 0x50 ||
       // CurrentInstruction == 0x70 ||

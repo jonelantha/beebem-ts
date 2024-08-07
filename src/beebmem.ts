@@ -46,12 +46,6 @@ const Roms = Array.from({ length: 16 }, () => new Uint8Array(0x4000));
 let PagedRomReg = 0;
 let ROMSEL = 0;
 
-export async function tempLoadMemSnapshot(file: string) {
-  const res = await fetch(file);
-  const buffer = await res.arrayBuffer();
-  WholeRam.set(new Uint8Array(buffer));
-}
-
 /*----------------------------------------------------------------------------*/
 /* Perform hardware address wrap around */
 function WrapAddr(Address: number) {

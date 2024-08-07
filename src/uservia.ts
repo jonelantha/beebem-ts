@@ -23,9 +23,12 @@ Boston, MA  02110-1301, USA.
 import {
   ClearTrigger,
   CycleCountTMax,
+  getCyclesToInt,
   getIntStatus,
   getTotalCycles,
   IRQ_userVia,
+  NO_TIMER_INT_DUE,
+  setCyclesToInt,
   setIntStatus,
   SetTrigger,
 } from "./6502core";
@@ -299,62 +302,52 @@ function UpdateIFRTopBit() {
 // }
 
 /*--------------------------------------------------------------------------*/
+let t1int = false;
 function UserVIA_poll_real() {
-  throw "not impl";
-  // 	static bool t1int = false;
+  if (UserVIAState.timer1c < -2 && !t1int) {
+    t1int = true;
+    if (!UserVIAState.timer1hasshot || UserVIAState.acr & 0x40) {
+      // DebugTrace("UserVIA timer1c - int at %d\n", TotalCycles);
+      UserVIAState.ifr |= 0x40; /* Timer 1 interrupt */
+      UpdateIFRTopBit();
 
-  // 	if (UserVIAState.timer1c<-2 && !t1int)
-  // 	{
-  // 		t1int = true;
-  // 		if (!UserVIAState.timer1hasshot || (UserVIAState.acr & 0x40))
-  // 		{
-  // 			// DebugTrace("UserVIA timer1c - int at %d\n", TotalCycles);
-  // 			UserVIAState.ifr|=0x40; /* Timer 1 interrupt */
-  // 			UpdateIFRTopBit();
+      if (UserVIAState.acr & 0x80) {
+        UserVIAState.orb ^= 0x80; /* Toggle PB7 */
+        UserVIAState.irb ^= 0x80; /* Toggle PB7 */
+      }
 
-  // 			if (UserVIAState.acr & 0x80)
-  // 			{
-  // 				UserVIAState.orb ^= 0x80; /* Toggle PB7 */
-  // 				UserVIAState.irb ^= 0x80; /* Toggle PB7 */
-  // 			}
+      if (UserVIAState.ier & 0x40 && getCyclesToInt() == NO_TIMER_INT_DUE) {
+        setCyclesToInt(3 + UserVIAState.timer1c);
+      }
 
-  // 			if ((UserVIAState.ier & 0x40) && CyclesToInt == NO_TIMER_INT_DUE)
-  // 			{
-  // 				CyclesToInt = 3 + UserVIAState.timer1c;
-  // 			}
+      UserVIAState.timer1hasshot = true;
+    }
+  }
 
-  // 			UserVIAState.timer1hasshot = true;
-  // 		}
-  // 	}
+  if (UserVIAState.timer1c < -3) {
+    // DebugTrace("UserVIA timer1c\n");
+    UserVIAState.timer1c += UserVIAState.timer1l * 2 + 4;
+    t1int = false;
+  }
 
-  //   if (UserVIAState.timer1c<-3) {
-  //     // DebugTrace("UserVIA timer1c\n");
-  //     UserVIAState.timer1c += (UserVIAState.timer1l * 2) + 4;
-  //     t1int=false;
-  //   }
+  if (UserVIAState.timer2c < -2) {
+    if (!UserVIAState.timer2hasshot) {
+      // DebugTrace("UserVIA timer2c - int\n");
+      UserVIAState.ifr |= 0x20; /* Timer 2 interrupt */
+      UpdateIFRTopBit();
 
-  // 	if (UserVIAState.timer2c < -2)
-  // 	{
-  // 		if (!UserVIAState.timer2hasshot)
-  // 		{
-  // 			// DebugTrace("UserVIA timer2c - int\n");
-  // 			UserVIAState.ifr |= 0x20; /* Timer 2 interrupt */
-  // 			UpdateIFRTopBit();
+      if (UserVIAState.ier & 0x20 && getCyclesToInt() == NO_TIMER_INT_DUE) {
+        setCyclesToInt(3 + UserVIAState.timer2c);
+      }
 
-  // 			if ((UserVIAState.ier & 0x20) && CyclesToInt == NO_TIMER_INT_DUE)
-  // 			{
-  // 				CyclesToInt = 3 + UserVIAState.timer2c;
-  // 			}
+      UserVIAState.timer2hasshot = true; // Added by K.Lowe 24/08/03
+    }
+  }
 
-  // 			UserVIAState.timer2hasshot = true; // Added by K.Lowe 24/08/03
-  // 		}
-  // 	}
-
-  // 	if (UserVIAState.timer2c < -3)
-  // 	{
-  // 		// DebugTrace("UserVIA timer2c\n");
-  // 		UserVIAState.timer2c += 0x20000; // Do not reload latches for T2
-  // 	}
+  if (UserVIAState.timer2c < -3) {
+    // DebugTrace("UserVIA timer2c\n");
+    UserVIAState.timer2c += 0x20000; // Do not reload latches for T2
+  }
 }
 
 /**

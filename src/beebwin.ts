@@ -29,7 +29,7 @@ Boston, MA  02110-1301, USA.
 // 28/12/2004: Econet added Rob O'Donnell. robert@irrelevant.com.
 // 26/12/2011: Added IDE Drive to Hardware options, JGH
 
-import { getTotalCycles } from "./6502core";
+import { getTotalCycles, Init6502core } from "./6502core";
 import { BeebMemInit } from "./beebmem";
 import { bufferHeight, bufferWidth, InitSurfaces } from "./beebwindx";
 import { REAL_TIME_TARGET } from "./beebwinh";
