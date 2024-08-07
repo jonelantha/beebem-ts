@@ -75,34 +75,40 @@ const SysVIAState: VIAState = {
 /* State of the 8bit latch IC32 - bit 0 is WE for sound gen, B1 is read
    select on speech proc, B2 is write select on speech proc, b4,b5 select
    screen start address offset , b6 is CAPS lock, b7 is shift lock */
-const IC32State = 0x00;
+let IC32State = 0x00;
 export const getIC32State = () => IC32State;
 
 /* Last value written to the slow data bus - sound reads it later */
-//static unsigned char SlowDataBusWriteValue=0;
+let SlowDataBusWriteValue = 0; // unsigned char
 
 /* Currently selected keyboard row, column */
-// static unsigned int KBDRow=0;
-// static unsigned int KBDCol=0;
+let KBDRow = 0; // unsigned int
+let KBDCol = 0; // unsigned int
 
-// static bool SysViaKbdState[16][8]; // Col, row
-// static int KeysDown=0;
+const SysViaKbdState = Array.from({ length: 16 }, () =>
+  Array.from({ length: 8 }, () => false),
+); // Col, row
+const KeysDown = 0; // static int
 
 // Master 128 MC146818AP Real-Time Clock and RAM
 //static time_t RTCTimeOffset = 0;
 
-// struct CMOSType
-// {
-// 	bool Enabled;
-// 	// unsigned char ChipSelect;
-// 	unsigned char Address;
-// 	// unsigned char StrobedData;
-// 	bool DataStrobe;
-// 	bool Op;
-// };
+type CMOSType = {
+  Enabled: boolean;
+  // unsigned char ChipSelect;
+  Address: number; //unsigned char
+  // unsigned char StrobedData;
+  DataStrobe: boolean;
+  Op: boolean;
+};
 
-// static struct CMOSType CMOS;
-// static bool OldCMOSState = false;
+let CMOS: CMOSType = {
+  Enabled: false,
+  Address: 0,
+  DataStrobe: false,
+  Op: false,
+};
+let OldCMOSState = false;
 
 /*--------------------------------------------------------------------------*/
 function UpdateIFRTopBit() {
@@ -143,42 +149,43 @@ function UpdateIFRTopBit() {
 // }
 
 /*--------------------------------------------------------------------------*/
-// void DoKbdIntCheck() {
-//   /* Now lets see if we just caused a CA2 interrupt - note we will flag
-//      it multiply - we aren't going to test for the edge */
-//   /* Two cases - write enable is OFF the keyboard - basically any key will cause an
-//      interrupt in a few cycles.
-//      */
-// #ifdef KBDDEBUG
-//   int Oldflag=(SysVIAState.ifr & 1);
-// #endif
+function DoKbdIntCheck() {
+  /* Now lets see if we just caused a CA2 interrupt - note we will flag
+     it multiply - we aren't going to test for the edge */
+  /* Two cases - write enable is OFF the keyboard - basically any key will cause an
+     interrupt in a few cycles.
+     */
+  // #ifdef KBDDEBUG
+  //   int Oldflag=(SysVIAState.ifr & 1);
+  // #endif
 
-//   if ((KeysDown>0) && ((SysVIAState.pcr & 0xc)==4)) {
-//     if ((IC32State & 8)==8) {
-//       SysVIAState.ifr|=1; /* CA2 */
-//       // DebugTrace("DoKbdIntCheck: Caused interrupt case 1\n");
-//       UpdateIFRTopBit();
-//     } else {
-//       if (KBDCol<15) {
-//         int presrow;
-//         for(presrow=1;presrow<8;presrow++) {
-//           if (SysViaKbdState[KBDCol][presrow]) {
-//             SysVIAState.ifr|=1;
-//             // DebugTrace("DoKbdIntCheck: Caused interrupt case 2\n");
-//             UpdateIFRTopBit();
-//           }
-//         } /* presrow */
-//       } /* KBDCol range */
-//     } /* WriteEnable on */
-//   } /* Keys down and CA2 input enabled */
+  if (KeysDown > 0 && (SysVIAState.pcr & 0xc) == 4) {
+    throw "not impl";
+    // if ((IC32State & 8)==8) {
+    //   SysVIAState.ifr|=1; /* CA2 */
+    //   // DebugTrace("DoKbdIntCheck: Caused interrupt case 1\n");
+    //   UpdateIFRTopBit();
+    // } else {
+    //   if (KBDCol<15) {
+    //     int presrow;
+    //     for(presrow=1;presrow<8;presrow++) {
+    //       if (SysViaKbdState[KBDCol][presrow]) {
+    //         SysVIAState.ifr|=1;
+    //         // DebugTrace("DoKbdIntCheck: Caused interrupt case 2\n");
+    //         UpdateIFRTopBit();
+    //       }
+    //     } /* presrow */
+    //   } /* KBDCol range */
+    // } /* WriteEnable on */
+  } /* Keys down and CA2 input enabled */
 
-// #ifdef KBDDEBUG
-//   DebugTrace("DoKbdIntCheck KeysDown=%d pcr & c=%d IC32State & 8=%d "
-//              "KBDRow=%d KBDCol=%d oldIFRflag=%d Newflag=%d\n",
-//              KeysDown, SysVIAState.pcr & 0xc, IC32State & 8,
-//              KBDRow, KBDCol, Oldflag, SysVIAState.ifr & 1);
-// #endif
-// }
+  // #ifdef KBDDEBUG
+  //   DebugTrace("DoKbdIntCheck KeysDown=%d pcr & c=%d IC32State & 8=%d "
+  //              "KBDRow=%d KBDCol=%d oldIFRflag=%d Newflag=%d\n",
+  //              KeysDown, SysVIAState.pcr & 0xc, IC32State & 8,
+  //              KBDRow, KBDCol, Oldflag, SysVIAState.ifr & 1);
+  // #endif
+}
 
 /*--------------------------------------------------------------------------*/
 // void BeebKeyDown(int row,int col) {
@@ -195,50 +202,52 @@ function UpdateIFRTopBit() {
 /*--------------------------------------------------------------------------*/
 /* Return current state of the single bi output of the keyboard matrix - NOT the
   any keypressed interrupt */
-// static bool KbdOP() {
-//   // Check range validity
-//   if (KBDCol > 14 || KBDRow > 7) return false; // Key not down if overrange - perhaps we should do something more?
+function KbdOP() {
+  // Check range validity
+  if (KBDCol > 14 || KBDRow > 7) return false; // Key not down if overrange - perhaps we should do something more?
 
-//   return SysViaKbdState[KBDCol][KBDRow];
-// }
+  return SysViaKbdState[KBDCol][KBDRow];
+}
 
 /*--------------------------------------------------------------------------*/
-// static void IC32Write(unsigned char Value) {
-//   // Hello. This is Richard Gellman. It is 10:25pm, Friday 2nd February 2001
-//   // I have to do CMOS RAM now. And I think I'm going slightly potty.
-//   // Additional, Sunday 4th February 2001. I must have been potty. the line above did read January 2000.
-//   int bit;
-//   int oldval=IC32State;
-//   bool tmpCMOSState;
+/**
+ * @param Value unsigned char
+ */
+function IC32Write(Value: number) {
+  // Hello. This is Richard Gellman. It is 10:25pm, Friday 2nd February 2001
+  // I have to do CMOS RAM now. And I think I'm going slightly potty.
+  // Additional, Sunday 4th February 2001. I must have been potty. the line above did read January 2000.
+  const oldval = IC32State;
+  let tmpCMOSState;
 
-//   bit=Value & 7;
-//   if (Value & 8) {
-//     IC32State|=(1<<bit);
-//   } else {
-//     IC32State&=0xff-(1<<bit);
-//   }
-//   LEDs.CapsLock=((IC32State&64)==0);
-//   LEDs.ShiftLock=((IC32State&128)==0);
-//   /* hmm, CMOS RAM? */
-//   // Monday 5th February 2001 - Scrapped my CMOS code, and restarted as according to the bible of the god Tom Lees
-//   CMOS.Op = (IC32State & 2) != 0;
-//   tmpCMOSState = (IC32State & 4) != 0;
-//   CMOS.DataStrobe = (tmpCMOSState == OldCMOSState) ? false : true;
-//   OldCMOSState = tmpCMOSState;
+  const bit = Value & 7;
+  if (Value & 8) {
+    IC32State |= 1 << bit;
+  } else {
+    IC32State &= 0xff - (1 << bit);
+  }
+  // LEDs.CapsLock=((IC32State&64)==0);
+  // LEDs.ShiftLock=((IC32State&128)==0);
+  /* hmm, CMOS RAM? */
+  // Monday 5th February 2001 - Scrapped my CMOS code, and restarted as according to the bible of the god Tom Lees
+  CMOS.Op = (IC32State & 2) != 0;
+  tmpCMOSState = (IC32State & 4) != 0;
+  CMOS.DataStrobe = tmpCMOSState === OldCMOSState ? false : true;
+  OldCMOSState = tmpCMOSState;
 
-//   /* Must do sound reg access when write line changes */
-// #ifdef SOUNDSUPPORT
-//   if (((oldval & 1)) && (!(IC32State & 1))) { Sound_RegWrite(SlowDataBusWriteValue); }
-//   // now, this was a change from 0 to 1, but my docs say its a change from 1 to 0. might work better this way.
-// #endif
-//   // DebugTrace("IC32State now=%x\n", IC32State);
+  /* Must do sound reg access when write line changes */
+  // #ifdef SOUNDSUPPORT
+  //   if (((oldval & 1)) && (!(IC32State & 1))) { Sound_RegWrite(SlowDataBusWriteValue); }
+  //   // now, this was a change from 0 to 1, but my docs say its a change from 1 to 0. might work better this way.
+  // #endif
+  // DebugTrace("IC32State now=%x\n", IC32State);
 
-//   if (!(IC32State & 8) && (oldval & 8)) {
-//     KBDRow=(SlowDataBusWriteValue>>4) & 7;
-//     KBDCol=(SlowDataBusWriteValue & 0xf);
-//     DoKbdIntCheck(); /* Should really only if write enable on KBD changes */
-//   }
-// }
+  if (!(IC32State & 8) && oldval & 8) {
+    KBDRow = (SlowDataBusWriteValue >> 4) & 7;
+    KBDCol = SlowDataBusWriteValue & 0xf;
+    DoKbdIntCheck(); /* Should really only if write enable on KBD changes */
+  }
+}
 
 // void ChipClock(int /* nCycles */) {
 // //	if (WECycles > 0) WECycles -= nCycles;
@@ -247,185 +256,195 @@ function UpdateIFRTopBit() {
 // }
 
 /*--------------------------------------------------------------------------*/
-// static void SlowDataBusWrite(unsigned char Value) {
-//   SlowDataBusWriteValue=Value;
-//   // DebugTrace("Slow data bus write IC32State=%d Value=0x%02x\n", IC32State, Value);
-//   if (!(IC32State & 8)) {
-//     KBDRow=(Value>>4) & 7;
-//     KBDCol=(Value & 0xf);
-//     // DebugTrace("SlowDataBusWrite to kbd  Row=%d Col=%d\n", KBDRow, KBDCol);
-//     DoKbdIntCheck(); /* Should really only if write enable on KBD changes */
-//   } /* kbd write */
+/**
+ * @param Value unsigned char
+ */
+function SlowDataBusWrite(Value: number) {
+  SlowDataBusWriteValue = Value;
+  // DebugTrace("Slow data bus write IC32State=%d Value=0x%02x\n", IC32State, Value);
+  if (!(IC32State & 8)) {
+    KBDRow = (Value >> 4) & 7;
+    KBDCol = Value & 0xf;
+    // DebugTrace("SlowDataBusWrite to kbd  Row=%d Col=%d\n", KBDRow, KBDCol);
+    DoKbdIntCheck(); /* Should really only if write enable on KBD changes */
+  } /* kbd write */
 
-// #ifdef SOUNDSUPPORT
-//   if (!(IC32State & 1)) {
-// 		Sound_RegWrite(SlowDataBusWriteValue);
-//   }
-// #endif
-
-// }
+  // #ifdef SOUNDSUPPORT
+  //   if (!(IC32State & 1)) {
+  // 		Sound_RegWrite(SlowDataBusWriteValue);
+  //   }
+  // #endif
+}
 
 /*--------------------------------------------------------------------------*/
-// static unsigned char SlowDataBusRead() {
+function SlowDataBusRead() {
+  let result = SysVIAState.ora & SysVIAState.ddra;
+  if (CMOS.Enabled) result = SysVIAState.ora & ~SysVIAState.ddra;
+  /* I don't know this lot properly - just put in things as we figure them out */
+  if (!(IC32State & 8)) {
+    if (KbdOP()) result |= 128;
+  }
 
-//   unsigned char result = SysVIAState.ora & SysVIAState.ddra;
-//   if (CMOS.Enabled) result=(SysVIAState.ora & ~SysVIAState.ddra);
-//   /* I don't know this lot properly - just put in things as we figure them out */
-//   if (!(IC32State & 8)) { if (KbdOP()) result|=128; }
+  if (!(IC32State & 4)) {
+    result = 0xff;
+  }
 
-//   if ((!(IC32State & 4))) {
-//     result = 0xff;
-//   }
+  // DebugTrace("SlowDataBusRead giving 0x%02x\n", result);
 
-//   // DebugTrace("SlowDataBusRead giving 0x%02x\n", result);
-
-//   return result;
-// }
+  return result;
+}
 
 /*--------------------------------------------------------------------------*/
 /* Address is in the range 0-f - with the fe40 stripped out */
-// void SysVIAWrite(int Address, unsigned char Value)
-// {
-//   // DebugTrace("SysVIAWrite: Address=0x%02x Value=0x%02x\n", Address, Value);
+/**
+ * @param Address int
+ * @param Value unsigned char
+ */
+export function SysVIAWrite(Address: number, Value: number) {
+  if ((Value & 0xff) !== Value) throw "Value error";
+  // DebugTrace("SysVIAWrite: Address=0x%02x Value=0x%02x\n", Address, Value);
 
-//   if (DebugEnabled)
-//   {
-//     DebugDisplayTraceF(DebugType::SysVIA, "SysVia: Write address %X value %02X",
-//                        Address & 0xf, Value);
-//   }
+  // if (DebugEnabled)
+  // {
+  //   DebugDisplayTraceF(DebugType::SysVIA, "SysVia: Write address %X value %02X",
+  //                      Address & 0xf, Value);
+  // }
 
-//   switch (Address) {
-//     case 0:
-//       // Clear bit 4 of IFR from ATOD Conversion
-//       SysVIAState.ifr&=~16;
-//       SysVIAState.orb = Value;
-//       IC32Write(Value);
-//       CMOS.Enabled = (Value & 64) != 0; // CMOS Chip select
-//       CMOS.Address=(((Value & 128)>>7)) ? SysVIAState.ora : CMOS.Address; // CMOS Address strobe
-//       if ((SysVIAState.ifr & 8) && ((SysVIAState.pcr & 0x20)==0)) {
-//         SysVIAState.ifr&=0xf7;
-//         UpdateIFRTopBit();
-//       }
-//       SysVIAState.ifr&=~16;
-//       UpdateIFRTopBit();
-//       break;
+  switch (Address) {
+    case 0:
+      // Clear bit 4 of IFR from ATOD Conversion
+      SysVIAState.ifr &= ~16;
+      SysVIAState.orb = Value;
+      IC32Write(Value);
+      CMOS.Enabled = (Value & 64) != 0; // CMOS Chip select
+      CMOS.Address = (Value & 128) >> 7 ? SysVIAState.ora : CMOS.Address; // CMOS Address strobe
+      if (SysVIAState.ifr & 8 && (SysVIAState.pcr & 0x20) == 0) {
+        SysVIAState.ifr &= 0xf7;
+        UpdateIFRTopBit();
+      }
+      SysVIAState.ifr &= ~16;
+      UpdateIFRTopBit();
+      break;
 
-//     case 1:
-//       SysVIAState.ora = Value;
-//       SlowDataBusWrite(Value);
-//       SysVIAState.ifr&=0xfc;
-//       UpdateIFRTopBit();
-//       break;
+    case 1:
+      throw "not impl";
+      // SysVIAState.ora = Value;
+      // SlowDataBusWrite(Value);
+      // SysVIAState.ifr&=0xfc;
+      // UpdateIFRTopBit();
+      break;
 
-//     case 2:
-//       SysVIAState.ddrb = Value;
-//       break;
+    case 2:
+      SysVIAState.ddrb = Value;
+      break;
 
-//     case 3:
-//       SysVIAState.ddra = Value;
-//       break;
+    case 3:
+      SysVIAState.ddra = Value;
+      break;
 
-//     case 4:
-//     case 6:
-//       SysVIAState.timer1l &= 0xff00;
-//       SysVIAState.timer1l |= Value;
-//       break;
+    case 4:
+    case 6:
+      SysVIAState.timer1l &= 0xff00;
+      SysVIAState.timer1l |= Value;
+      break;
 
-//     case 5:
-//       SysVIAState.timer1l &= 0xff;
-//       SysVIAState.timer1l |= Value << 8;
-//       SysVIAState.timer1c=SysVIAState.timer1l * 2 + 1;
-//       SysVIAState.ifr &=0xbf; /* clear timer 1 ifr */
-//       /* If PB7 toggling enabled, then lower PB7 now */
-//       if (SysVIAState.acr & 128) {
-//         SysVIAState.orb&=0x7f;
-//         SysVIAState.irb&=0x7f;
-//       }
-//       UpdateIFRTopBit();
-//       SysVIAState.timer1hasshot = false;
-//       break;
+    case 5:
+      SysVIAState.timer1l &= 0xff;
+      SysVIAState.timer1l |= Value << 8;
+      SysVIAState.timer1c = SysVIAState.timer1l * 2 + 1;
+      SysVIAState.ifr &= 0xbf; /* clear timer 1 ifr */
+      /* If PB7 toggling enabled, then lower PB7 now */
+      if (SysVIAState.acr & 128) {
+        SysVIAState.orb &= 0x7f;
+        SysVIAState.irb &= 0x7f;
+      }
+      UpdateIFRTopBit();
+      SysVIAState.timer1hasshot = false;
+      break;
 
-//     case 7:
-//       SysVIAState.timer1l &= 0xff;
-//       SysVIAState.timer1l |= Value << 8;
-//       SysVIAState.ifr &=0xbf; /* clear timer 1 ifr (this is what Model-B does) */
-//       UpdateIFRTopBit();
-//       break;
+    case 7:
+      SysVIAState.timer1l &= 0xff;
+      SysVIAState.timer1l |= Value << 8;
+      SysVIAState.ifr &= 0xbf; /* clear timer 1 ifr (this is what Model-B does) */
+      UpdateIFRTopBit();
+      break;
 
-//     case 8:
-//       SysVIAState.timer2l &= 0xff00;
-//       SysVIAState.timer2l |= Value;
-//       break;
+    case 8:
+      SysVIAState.timer2l &= 0xff00;
+      SysVIAState.timer2l |= Value;
+      break;
 
-//     case 9:
-//       SysVIAState.timer2l &= 0xff;
-//       SysVIAState.timer2l |= Value << 8;
-//       SysVIAState.timer2c=SysVIAState.timer2l * 2 + 1;
-//       if (SysVIAState.timer2c == 0) SysVIAState.timer2c = 0x20000;
-//       SysVIAState.ifr &= 0xdf; // Clear timer 2 IFR
-//       UpdateIFRTopBit();
-//       SysVIAState.timer2hasshot = false;
-//       break;
+    case 9:
+      SysVIAState.timer2l &= 0xff;
+      SysVIAState.timer2l |= Value << 8;
+      SysVIAState.timer2c = SysVIAState.timer2l * 2 + 1;
+      if (SysVIAState.timer2c == 0) SysVIAState.timer2c = 0x20000;
+      SysVIAState.ifr &= 0xdf; // Clear timer 2 IFR
+      UpdateIFRTopBit();
+      SysVIAState.timer2hasshot = false;
+      break;
 
-//     case 10:
-//       SRData=Value;
-//       break;
+    case 10:
+      throw "not impl";
+      //SRData=Value;
+      break;
 
-//     case 11:
-//       SysVIAState.acr = Value;
-//       SRMode=(Value>>2)&7;
-//       break;
+    case 11:
+      throw "not impl";
+      // SysVIAState.acr = Value;
+      // SRMode=(Value>>2)&7;
+      break;
 
-//     case 12:
-//       SysVIAState.pcr = Value;
+    case 12:
+      throw "not impl";
+      // SysVIAState.pcr = Value;
 
-//       if ((Value & PCR_CA2_CONTROL) == PCR_CA2_OUTPUT_HIGH)
-//       {
-//         SysVIAState.ca2 = true;
-//       }
-//       else if ((Value & PCR_CA2_CONTROL) == PCR_CA2_OUTPUT_LOW)
-//       {
-//         SysVIAState.ca2 = false;
-//       }
+      // if ((Value & PCR_CA2_CONTROL) == PCR_CA2_OUTPUT_HIGH)
+      // {
+      //   SysVIAState.ca2 = true;
+      // }
+      // else if ((Value & PCR_CA2_CONTROL) == PCR_CA2_OUTPUT_LOW)
+      // {
+      //   SysVIAState.ca2 = false;
+      // }
 
-//       if ((Value & PCR_CB2_CONTROL) == PCR_CB2_OUTPUT_HIGH)
-//       {
-//         if (!SysVIAState.cb2)
-//         {
-//           // Light pen strobe on CB2 low -> high transition
-//           VideoLightPenStrobe();
-//         }
+      // if ((Value & PCR_CB2_CONTROL) == PCR_CB2_OUTPUT_HIGH)
+      // {
+      //   if (!SysVIAState.cb2)
+      //   {
+      //     // Light pen strobe on CB2 low -> high transition
+      //     VideoLightPenStrobe();
+      //   }
 
-//         SysVIAState.cb2 = true;
-//       }
-//       else if ((Value & PCR_CB2_CONTROL) == PCR_CB2_OUTPUT_LOW)
-//       {
-//         SysVIAState.cb2 = false;
-//       }
-//       break;
+      //   SysVIAState.cb2 = true;
+      // }
+      // else if ((Value & PCR_CB2_CONTROL) == PCR_CB2_OUTPUT_LOW)
+      // {
+      //   SysVIAState.cb2 = false;
+      // }
+      break;
 
-//     case 13:
-//       SysVIAState.ifr &= ~Value;
-//       UpdateIFRTopBit();
-//       break;
+    case 13:
+      throw "not impl";
+      // SysVIAState.ifr &= ~Value;
+      // UpdateIFRTopBit();
+      break;
 
-//     case 14:
-//       // DebugTrace("Write ier Value=0x%02x\n", Value);
+    case 14:
+      // DebugTrace("Write ier Value=0x%02x\n", Value);
 
-//       if (Value & 0x80)
-//         SysVIAState.ier |= Value;
-//       else
-//         SysVIAState.ier &= ~Value;
-//       SysVIAState.ier&=0x7f;
-//       UpdateIFRTopBit();
-//       break;
+      if (Value & 0x80) SysVIAState.ier |= Value;
+      else SysVIAState.ier &= ~Value;
+      SysVIAState.ier &= 0x7f;
+      UpdateIFRTopBit();
+      break;
 
-//     case 15:
-//       SysVIAState.ora = Value;
-//       SlowDataBusWrite(Value);
-//       break;
-//   }
-// }
+    case 15:
+      SysVIAState.ora = Value;
+      SlowDataBusWrite(Value);
+      break;
+  }
+}
 
 /*--------------------------------------------------------------------------*/
 
@@ -505,12 +524,12 @@ export function SysVIARead(Address: number) {
     //     case 1:
     //       SysVIAState.ifr&=0xfc;
     //       UpdateIFRTopBit();
-    //     case 15:
-    //       /* slow data bus read */
-    //       tmp = SlowDataBusRead();
-    //       break;
+    case 15:
+      /* slow data bus read */
+      tmp = SlowDataBusRead();
+      break;
     default:
-      throw "not impl";
+      throw `not impl ${Address}`;
   } /* Address switch */
   //   if (DebugEnabled)
   //   {

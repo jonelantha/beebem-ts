@@ -26,8 +26,8 @@ Boston, MA  02110-1301, USA.
 // Econet emulation: Rob O'Donnell robert@irrelevant.com 28/12/2004
 // IDE Interface: JGH jgh@mdfs.net 25/12/2011
 
-import { AdjustForIORead, SyncIO } from "./6502core";
-import { getIC32State, SysVIARead } from "./sysvia";
+import { AdjustForIORead, AdjustForIOWrite, SyncIO } from "./6502core";
+import { getIC32State, SysVIARead, SysVIAWrite } from "./sysvia";
 import { VideoULARead, VideoULAWrite } from "./video";
 
 export function BEEBREADMEM_DIRECT(Address: number) {
@@ -298,11 +298,10 @@ export function BeebWriteMem(Address: number, Value: number) {
 
   /* Can write to a via using either of the two 16 bytes blocks */
   if ((Address & ~0xf) == 0xfe40 || (Address & ~0xf) == 0xfe50) {
-    throw "not impl";
-    // SyncIO();
-    // AdjustForIOWrite();
-    // SysVIAWrite(Address & 0xf, Value);
-    // return;
+    SyncIO();
+    AdjustForIOWrite();
+    SysVIAWrite(Address & 0xf, Value);
+    return;
   }
 
   /* Can write to a via using either of the two 16 bytes blocks */
