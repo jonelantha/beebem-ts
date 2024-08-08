@@ -46,6 +46,28 @@ export type VIAState = {
   cb2: boolean;
 };
 
+// 6522 Peripheral Control Register
+export const PCR_CB2_CONTROL = 0xe0;
+export const PCR_CB1_INTERRUPT_CONTROL = 0x10;
+export const PCR_CA2_CONTROL = 0x0e;
+export const PCR_CA1_INTERRUPT_CONTROL = 0x01;
+
+// PCR CB2 control bits
+export const PCR_CB2_OUTPUT_PULSE = 0xa0;
+export const PCR_CB2_OUTPUT_LOW = 0xc0;
+export const PCR_CB2_OUTPUT_HIGH = 0xe0;
+
+// PCR CB1 interrupt control bit
+export const PCB_CB1_POSITIVE_INT = 0x10;
+
+// PCR CA2 control bits
+export const PCR_CA2_OUTPUT_PULSE = 0x0a;
+export const PCR_CA2_OUTPUT_LOW = 0x0c;
+export const PCR_CA2_OUTPUT_HIGH = 0x0e;
+
+// PCR CA1 interrupt control bit
+export const PCB_CA1_POSITIVE_INT = 0x01;
+
 // main
 
 export function VIAReset(ToReset: VIAState) {

@@ -24,6 +24,7 @@ import {
   ClearTrigger,
   CycleCountTMax,
   getCyclesToInt,
+  getInstCount,
   getIntStatus,
   getTotalCycles,
   IRQ_userVia,
@@ -77,124 +78,133 @@ function UpdateIFRTopBit() {
 
 /*--------------------------------------------------------------------------*/
 /* Address is in the range 0-f - with the fe60 stripped out */
-// void UserVIAWrite(int Address, unsigned char Value)
-// {
-// 	// DebugTrace("UserVIAWrite: Address=0x%02x Value=0x%02x\n", Address, Value);
+/**
+ * @param Address int
+ * @param Value unsigned char
+ */
+export function UserVIAWrite(Address: number, Value: number) {
+  // DebugTrace("UserVIAWrite: Address=0x%02x Value=0x%02x\n", Address, Value);
 
-// 	if (DebugEnabled)
-// 	{
-// 		DebugDisplayTraceF(DebugType::UserVIA, "UserVia: Write address % X value % 02X",
-// 		                   Address & 0xf, Value);
-// 	}
+  // if (DebugEnabled)
+  // {
+  // 	DebugDisplayTraceF(DebugType::UserVIA, "UserVia: Write address % X value % 02X",
+  // 	                   Address & 0xf, Value);
+  // }
 
-// 	switch (Address)
-// 	{
-// 		case 0:
-// 			UserVIAState.orb = Value;
+  switch (Address) {
+    case 0:
+      throw "not impl";
+      UserVIAState.orb = Value;
 
-// 			if ((UserVIAState.ifr & 8) && ((UserVIAState.pcr & 0x20) == 0))
-// 			{
-// 				UserVIAState.ifr &= 0xf7;
-// 				UpdateIFRTopBit();
-// 			}
+      if (UserVIAState.ifr & 8 && (UserVIAState.pcr & 0x20) == 0) {
+        UserVIAState.ifr &= 0xf7;
+        UpdateIFRTopBit();
+      }
 
-// 			break;
+      break;
 
-// 		case 1:
-// 			UserVIAState.ora = Value;
-// 			UserVIAState.ifr &= 0xfc;
-// 			UpdateIFRTopBit();
-// 			break;
+    case 1:
+      throw "not impl";
+      UserVIAState.ora = Value;
+      UserVIAState.ifr &= 0xfc;
+      UpdateIFRTopBit();
+      break;
 
-// 		case 2:
-// 			UserVIAState.ddrb = Value;
-// 			break;
+    case 2:
+      throw "not impl";
+      UserVIAState.ddrb = Value;
+      break;
 
-// 		case 3:
-// 			UserVIAState.ddra = Value;
-// 			break;
+    case 3:
+      UserVIAState.ddra = Value;
+      break;
 
-// 		case 4:
-// 		case 6:
-// 			// DebugTrace("UserVia Reg4 Timer1 lo Counter Write val=0x%02x at %d\n", Value, TotalCycles);
-// 			UserVIAState.timer1l &= 0xff00;
-// 			UserVIAState.timer1l |= Value & 0xff;
-// 			break;
+    case 4:
+    case 6:
+      throw "not impl";
+      // DebugTrace("UserVia Reg4 Timer1 lo Counter Write val=0x%02x at %d\n", Value, TotalCycles);
+      UserVIAState.timer1l &= 0xff00;
+      UserVIAState.timer1l |= Value & 0xff;
+      break;
 
-// 		case 5:
-// 			// DebugTrace("UserVia Reg5 Timer1 hi Counter Write val=0x%02x at %d\n", Value, TotalCycles);
-// 			UserVIAState.timer1l &= 0xff;
-// 			UserVIAState.timer1l |= Value << 8;
-// 			UserVIAState.timer1c = UserVIAState.timer1l * 2 + 1;
-// 			UserVIAState.ifr &= 0xbf; /* clear timer 1 ifr */
-// 			/* If PB7 toggling enabled, then lower PB7 now */
-// 			if (UserVIAState.acr & 128)
-// 			{
-// 				UserVIAState.orb &= 0x7f;
-// 				UserVIAState.irb &= 0x7f;
-// 			}
-// 			UpdateIFRTopBit();
-// 			UserVIAState.timer1hasshot = false; // Added by K.Lowe 24/08/03
-// 			break;
+    case 5:
+      throw "not impl";
+      // DebugTrace("UserVia Reg5 Timer1 hi Counter Write val=0x%02x at %d\n", Value, TotalCycles);
+      UserVIAState.timer1l &= 0xff;
+      UserVIAState.timer1l |= Value << 8;
+      UserVIAState.timer1c = UserVIAState.timer1l * 2 + 1;
+      UserVIAState.ifr &= 0xbf; /* clear timer 1 ifr */
+      /* If PB7 toggling enabled, then lower PB7 now */
+      if (UserVIAState.acr & 128) {
+        UserVIAState.orb &= 0x7f;
+        UserVIAState.irb &= 0x7f;
+      }
+      UpdateIFRTopBit();
+      UserVIAState.timer1hasshot = false; // Added by K.Lowe 24/08/03
+      break;
 
-// 		case 7:
-// 			// DebugTrace("UserVia Reg7 Timer1 hi latch Write val=0x%02x at %d\n", Value, TotalCycles);
-// 			UserVIAState.timer1l &= 0xff;
-// 			UserVIAState.timer1l |= Value << 8;
-// 			UserVIAState.ifr &=0xbf; /* clear timer 1 ifr (this is what Model-B does) */
-// 			UpdateIFRTopBit();
-// 			break;
+    case 7:
+      throw "not impl";
+      // DebugTrace("UserVia Reg7 Timer1 hi latch Write val=0x%02x at %d\n", Value, TotalCycles);
+      UserVIAState.timer1l &= 0xff;
+      UserVIAState.timer1l |= Value << 8;
+      UserVIAState.ifr &= 0xbf; /* clear timer 1 ifr (this is what Model-B does) */
+      UpdateIFRTopBit();
+      break;
 
-// 		case 8:
-// 			// DebugTrace("UserVia Reg8 Timer2 lo Counter Write val=0x%02x at %d\n", Value, TotalCycles);
-// 			UserVIAState.timer2l &= 0xff00;
-// 			UserVIAState.timer2l |= Value;
-// 			break;
+    case 8:
+      throw "not impl";
+      // DebugTrace("UserVia Reg8 Timer2 lo Counter Write val=0x%02x at %d\n", Value, TotalCycles);
+      UserVIAState.timer2l &= 0xff00;
+      UserVIAState.timer2l |= Value;
+      break;
 
-// 		case 9:
-// 			// DebugTrace("UserVia Reg9 Timer2 hi Counter Write val=0x%02x at %d\n", Value, TotalCycles);
-// 			UserVIAState.timer2l &= 0xff;
-// 			UserVIAState.timer2l |= Value << 8;
-// 			UserVIAState.timer2c = UserVIAState.timer2l * 2 + 1;
-// 			UserVIAState.ifr &= 0xdf; /* clear timer 2 ifr */
-// 			UpdateIFRTopBit();
-// 			UserVIAState.timer2hasshot = false; // Added by K.Lowe 24/08/03
-// 			break;
+    case 9:
+      throw "not impl";
+      // DebugTrace("UserVia Reg9 Timer2 hi Counter Write val=0x%02x at %d\n", Value, TotalCycles);
+      UserVIAState.timer2l &= 0xff;
+      UserVIAState.timer2l |= Value << 8;
+      UserVIAState.timer2c = UserVIAState.timer2l * 2 + 1;
+      UserVIAState.ifr &= 0xdf; /* clear timer 2 ifr */
+      UpdateIFRTopBit();
+      UserVIAState.timer2hasshot = false; // Added by K.Lowe 24/08/03
+      break;
 
-// 		case 10:
-// 			UserVIAState.sr = Value;
-// 			UpdateSRState(true);
-// 			break;
+    case 10:
+      throw "not impl";
+      UserVIAState.sr = Value;
+      UpdateSRState(true);
+      break;
 
-// 		case 11:
-// 			UserVIAState.acr = Value;
-// 			UpdateSRState(false);
-// 			break;
+    case 11:
+      throw "not impl";
+      UserVIAState.acr = Value;
+      UpdateSRState(false);
+      break;
 
-// 		case 12:
-// 			UserVIAState.pcr = Value;
-// 			break;
+    case 12:
+      UserVIAState.pcr = Value;
+      break;
 
-// 		case 13:
-// 			UserVIAState.ifr &= ~Value;
-// 			UpdateIFRTopBit();
-// 			break;
+    case 13:
+      UserVIAState.ifr &= ~Value;
+      UpdateIFRTopBit();
+      break;
 
-// 		case 14:
-// 			// DebugTrace("User VIA Write ier Value=0x%02x\n", Value);
-// 			if (Value & 0x80)
-// 				UserVIAState.ier |= Value;
-// 			else
-// 				UserVIAState.ier &= ~Value;
-// 			UserVIAState.ier &= 0x7f;
-// 			UpdateIFRTopBit();
-// 			break;
+    case 14:
+      // DebugTrace("User VIA Write ier Value=0x%02x\n", Value);
+      if (Value & 0x80) UserVIAState.ier |= Value;
+      else UserVIAState.ier &= ~Value;
+      UserVIAState.ier &= 0x7f;
+      UpdateIFRTopBit();
+      break;
 
-// 		case 15:
-// 			UserVIAState.ora = Value;
-// 			break;
-// 	}
-// }
+    case 15:
+      throw "not impl";
+      UserVIAState.ora = Value;
+      break;
+  }
+}
 
 /*--------------------------------------------------------------------------*/
 

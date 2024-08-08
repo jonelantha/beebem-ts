@@ -27,21 +27,31 @@ keyboard emulation - David Alan Gilbert 30/10/94 */
 
 import {
   getCyclesToInt,
+  getInstCount,
   getIntStatus,
   IRQ_sysVia,
   NO_TIMER_INT_DUE,
   setCyclesToInt,
   setIntStatus,
 } from "./6502core";
-import { VIAReset, VIAState } from "./via";
+import {
+  PCR_CA2_CONTROL,
+  PCR_CA2_OUTPUT_HIGH,
+  PCR_CA2_OUTPUT_LOW,
+  PCR_CB2_CONTROL,
+  PCR_CB2_OUTPUT_HIGH,
+  PCR_CB2_OUTPUT_LOW,
+  VIAReset,
+  VIAState,
+} from "./via";
 
 // header
 
 // main
 
 // Shift register stuff
-// unsigned char SRMode;
-// unsigned char SRCount;
+let SRMode = 0; //unsigned char
+//let SRCount = 0; // unsigned char
 // unsigned char SRData;
 // unsigned char SREnabled;
 
@@ -390,44 +400,35 @@ export function SysVIAWrite(Address: number, Value: number) {
       break;
 
     case 11:
-      throw "not impl";
-      // SysVIAState.acr = Value;
-      // SRMode=(Value>>2)&7;
+      SysVIAState.acr = Value;
+      SRMode = (Value >> 2) & 7;
       break;
 
     case 12:
-      throw "not impl";
-      // SysVIAState.pcr = Value;
+      SysVIAState.pcr = Value;
 
-      // if ((Value & PCR_CA2_CONTROL) == PCR_CA2_OUTPUT_HIGH)
-      // {
-      //   SysVIAState.ca2 = true;
-      // }
-      // else if ((Value & PCR_CA2_CONTROL) == PCR_CA2_OUTPUT_LOW)
-      // {
-      //   SysVIAState.ca2 = false;
-      // }
+      if ((Value & PCR_CA2_CONTROL) == PCR_CA2_OUTPUT_HIGH) {
+        SysVIAState.ca2 = true;
+      } else if ((Value & PCR_CA2_CONTROL) == PCR_CA2_OUTPUT_LOW) {
+        SysVIAState.ca2 = false;
+      }
 
-      // if ((Value & PCR_CB2_CONTROL) == PCR_CB2_OUTPUT_HIGH)
-      // {
-      //   if (!SysVIAState.cb2)
-      //   {
-      //     // Light pen strobe on CB2 low -> high transition
-      //     VideoLightPenStrobe();
-      //   }
+      if ((Value & PCR_CB2_CONTROL) == PCR_CB2_OUTPUT_HIGH) {
+        if (!SysVIAState.cb2) {
+          // Light pen strobe on CB2 low -> high transition
+          throw "not impl";
+          //VideoLightPenStrobe();
+        }
 
-      //   SysVIAState.cb2 = true;
-      // }
-      // else if ((Value & PCR_CB2_CONTROL) == PCR_CB2_OUTPUT_LOW)
-      // {
-      //   SysVIAState.cb2 = false;
-      // }
+        SysVIAState.cb2 = true;
+      } else if ((Value & PCR_CB2_CONTROL) == PCR_CB2_OUTPUT_LOW) {
+        SysVIAState.cb2 = false;
+      }
       break;
 
     case 13:
-      throw "not impl";
-      // SysVIAState.ifr &= ~Value;
-      // UpdateIFRTopBit();
+      SysVIAState.ifr &= ~Value;
+      UpdateIFRTopBit();
       break;
 
     case 14:
@@ -613,10 +614,10 @@ export function SysVIA_poll(ncycles: number) {
   //DoKbdIntCheck();
 
   // Do Shift register stuff
-  //  if (SRMode==2) {
-  // Shift IN under control of Clock 2
-  //	  SRCount=8-(ncycles%8);
-  //  }
+  // if (SRMode == 2) {
+  //   //Shift IN under control of Clock 2
+  //   SRCount = 8 - (ncycles % 8);
+  // }
 }
 
 /*--------------------------------------------------------------------------*/
@@ -627,8 +628,8 @@ export function SysVIAReset() {
   // BeebReleaseAllKeys();
 
   // SRData = 0;
-  // SRMode = 0;
-  // SRCount = 0;
+  SRMode = 0;
+  //SRCount = 0;
   // SREnabled = 0; // Disable Shift register shifting shiftily. (I am nuts) - Richard Gellman
 }
 

@@ -59,7 +59,7 @@ export const ClearTrigger = () => CycleCountTMax;
 
 // util
 
-const charToSignedChar = (char: number) => (char & 0xf0 ? char - 0x100 : char);
+const charToSignedChar = (char: number) => (char & 0x80 ? char - 0x100 : char);
 const intToUnsignedChar = (val: number) => {
   if (val > 127 || val < -128) throw "out of range";
   return val >= 0 ? val : val + 0x100;
@@ -443,12 +443,12 @@ function ASLInstrHandler_Acc() {
   );
 } /* ASLInstrHandler_Acc */
 
-// INLINE static void BCCInstrHandler(void) {
-//   if (!GETCFLAG) {
-//     ProgramCounter=RelAddrModeHandler_Data();
-//     Branched = true;
-//   } else ProgramCounter++;
-// } /* BCCInstrHandler */
+function BCCInstrHandler() {
+  if (!GETCFLAG()) {
+    ProgramCounter = RelAddrModeHandler_Data();
+    Branched = true;
+  } else ProgramCounter++;
+} /* BCCInstrHandler */
 
 function BCSInstrHandler() {
   if (GETCFLAG()) {
@@ -464,12 +464,14 @@ function BEQInstrHandler() {
   } else ProgramCounter++;
 } /* BEQInstrHandler */
 
-// INLINE static void BITInstrHandler(int operand)
-// {
-//   PSR&=~(FlagZ | FlagN | FlagV);
-//   /* z if result 0, and NV to top bits of operand */
-//   PSR|=(((Accumulator & operand)==0)<<1) | (operand & 192);
-// }
+/**
+ * @param operand int
+ */
+function BITInstrHandler(operand: number) {
+  PSR &= ~(FlagZ | FlagN | FlagV);
+  /* z if result 0, and NV to top bits of operand */
+  PSR |= (((Accumulator & operand) == 0 ? 1 : 0) << 1) | (operand & 192);
+}
 
 // INLINE static void BMIInstrHandler(void) {
 //   if (GETNFLAG) {
@@ -500,12 +502,12 @@ function BPLInstrHandler() {
 //   ProgramCounter=BeebReadMem(0xfffe) | (BeebReadMem(0xffff)<<8);
 // } /* BRKInstrHandler */
 
-// INLINE static void BVCInstrHandler(void) {
-//   if (!GETVFLAG) {
-//     ProgramCounter=RelAddrModeHandler_Data();
-//     Branched = true;
-//   } else ProgramCounter++;
-// } /* BVCInstrHandler */
+function BVCInstrHandler() {
+  if (!GETVFLAG()) {
+    ProgramCounter = RelAddrModeHandler_Data();
+    Branched = true;
+  } else ProgramCounter++;
+} /* BVCInstrHandler */
 
 // INLINE static void BVSInstrHandler(void) {
 //   if (GETVFLAG) {
@@ -561,11 +563,13 @@ function DEXInstrHandler() {
   SetPSRZN(XReg);
 } /* DEXInstrHandler */
 
-// INLINE static void EORInstrHandler(int operand)
-// {
-//   Accumulator^=operand;
-//   SetPSRZN(Accumulator);
-// } /* EORInstrHandler */
+/**
+ * @param operand int
+ */
+function EORInstrHandler(operand: number) {
+  Accumulator ^= operand;
+  SetPSRZN(Accumulator);
+} /* EORInstrHandler */
 
 /**
  * @param address int
@@ -865,15 +869,14 @@ function ZeroPgAddrModeHandler_Address() {
 
 /*-------------------------------------------------------------------------*/
 /* Indexed with Y postinc addressing mode handler                          */
-// INLINE static int IndYAddrModeHandler_Data()
-// {
-//   uint8_t ZPAddr=ReadPaged(ProgramCounter++);
-//   uint16_t EffectiveAddress=WholeRam[ZPAddr]+YReg;
-//   if (EffectiveAddress>0xff) Carried();
-//   EffectiveAddress+=(WholeRam[(uint8_t)(ZPAddr+1)]<<8);
+function IndYAddrModeHandler_Data() {
+  const ZPAddr = ReadPaged(ProgramCounter++);
+  let EffectiveAddress = BeebReadMem(ZPAddr) + YReg;
+  if (EffectiveAddress > 0xff) Carried();
+  EffectiveAddress += BeebReadMem(ZPAddr + 1) << 8;
 
-//   return(ReadPaged(EffectiveAddress));
-// }
+  return ReadPaged(EffectiveAddress);
+}
 
 /*-------------------------------------------------------------------------*/
 /* Indexed with Y postinc addressing mode handler                          */
@@ -896,87 +899,80 @@ function IndYAddrModeHandler_Address() {
 
 /*-------------------------------------------------------------------------*/
 /* Zero page wih X offset addressing mode handler                          */
-// INLINE static int ZeroPgXAddrModeHandler_Address()
-// {
-// 	int EffectiveAddress = (ReadPaged(ProgramCounter++) + XReg) & 255;
-// 	return EffectiveAddress;
-// }
+function ZeroPgXAddrModeHandler_Address() {
+  const EffectiveAddress = (ReadPaged(ProgramCounter++) + XReg) & 255;
+  return EffectiveAddress;
+}
 
 /*-------------------------------------------------------------------------*/
 /* Absolute with X offset addressing mode handler                          */
-// INLINE static int AbsXAddrModeHandler_Data()
-// {
-//   int EffectiveAddress;
-//   GETTWOBYTEFROMPC(EffectiveAddress);
-//   if ((EffectiveAddress & 0xff00)!=((EffectiveAddress+XReg) & 0xff00)) Carried();
-//   EffectiveAddress+=XReg;
-//   EffectiveAddress&=0xffff;
+function AbsXAddrModeHandler_Data() {
+  let EffectiveAddress = GETTWOBYTEFROMPC();
+  if ((EffectiveAddress & 0xff00) != ((EffectiveAddress + XReg) & 0xff00))
+    Carried();
+  EffectiveAddress += XReg;
+  EffectiveAddress &= 0xffff;
 
-//   return ReadPaged(EffectiveAddress);
-// }
+  return ReadPaged(EffectiveAddress);
+}
 
 /*-------------------------------------------------------------------------*/
 /* Absolute with X offset addressing mode handler                          */
-// INLINE static int AbsXAddrModeHandler_Address()
-// {
-//   int EffectiveAddress;
-//   GETTWOBYTEFROMPC(EffectiveAddress);
-//   if ((EffectiveAddress & 0xff00)!=((EffectiveAddress+XReg) & 0xff00)) Carried();
-//   EffectiveAddress+=XReg;
-//   EffectiveAddress&=0xffff;
+function AbsXAddrModeHandler_Address() {
+  let EffectiveAddress = GETTWOBYTEFROMPC();
+  if ((EffectiveAddress & 0xff00) != ((EffectiveAddress + XReg) & 0xff00))
+    Carried();
+  EffectiveAddress += XReg;
+  EffectiveAddress &= 0xffff;
 
-//   return EffectiveAddress;
-// }
-
-/*-------------------------------------------------------------------------*/
-/* Absolute with Y offset addressing mode handler                          */
-// INLINE static int AbsYAddrModeHandler_Data()
-// {
-//   int EffectiveAddress;
-//   GETTWOBYTEFROMPC(EffectiveAddress);
-//   if ((EffectiveAddress & 0xff00)!=((EffectiveAddress+YReg) & 0xff00)) Carried();
-//   EffectiveAddress+=YReg;
-//   EffectiveAddress&=0xffff;
-
-//   return ReadPaged(EffectiveAddress);
-// }
+  return EffectiveAddress;
+}
 
 /*-------------------------------------------------------------------------*/
 /* Absolute with Y offset addressing mode handler                          */
-// INLINE static int AbsYAddrModeHandler_Address()
-// {
-//   int EffectiveAddress;
-//   GETTWOBYTEFROMPC(EffectiveAddress);
-//   if ((EffectiveAddress & 0xff00)!=((EffectiveAddress+YReg) & 0xff00)) Carried();
-//   EffectiveAddress+=YReg;
-//   EffectiveAddress&=0xffff;
+function AbsYAddrModeHandler_Data() {
+  let EffectiveAddress = GETTWOBYTEFROMPC();
+  if ((EffectiveAddress & 0xff00) != ((EffectiveAddress + YReg) & 0xff00))
+    Carried();
+  EffectiveAddress += YReg;
+  EffectiveAddress &= 0xffff;
 
-//   return EffectiveAddress;
-// }
+  return ReadPaged(EffectiveAddress);
+}
+
+/*-------------------------------------------------------------------------*/
+/* Absolute with Y offset addressing mode handler                          */
+function AbsYAddrModeHandler_Address() {
+  let EffectiveAddress = GETTWOBYTEFROMPC();
+  if ((EffectiveAddress & 0xff00) != ((EffectiveAddress + YReg) & 0xff00))
+    Carried();
+  EffectiveAddress += YReg;
+  EffectiveAddress &= 0xffff;
+
+  return EffectiveAddress;
+}
 
 /*-------------------------------------------------------------------------*/
 /* Indirect addressing mode handler                                        */
-// INLINE static int IndAddrModeHandler_Address() {
-//   /* For jump indirect only */
-//   int VectorLocation;
-//   int EffectiveAddress;
+function IndAddrModeHandler_Address() {
+  /* For jump indirect only */
+  let EffectiveAddress: number;
 
-//   GETTWOBYTEFROMPC(VectorLocation);
+  const VectorLocation = GETTWOBYTEFROMPC();
 
-//   /* Ok kiddies, deliberate bug time.
-//   According to my BBC Master Reference Manual Part 2
-//   the 6502 has a bug concerning this addressing mode and VectorLocation==xxFF
-//   so, we're going to emulate that bug -- Richard Gellman */
-//   if ((VectorLocation & 0xff) != 0xff) {
-// 	EffectiveAddress=ReadPaged(VectorLocation);
-// 	EffectiveAddress|=ReadPaged(VectorLocation+1) << 8;
-//   }
-//   else {
-//    EffectiveAddress=ReadPaged(VectorLocation);
-//    EffectiveAddress|=ReadPaged(VectorLocation-255) << 8;
-//   }
-//   return EffectiveAddress;
-// }
+  /* Ok kiddies, deliberate bug time.
+  According to my BBC Master Reference Manual Part 2
+  the 6502 has a bug concerning this addressing mode and VectorLocation==xxFF
+  so, we're going to emulate that bug -- Richard Gellman */
+  if ((VectorLocation & 0xff) != 0xff) {
+    EffectiveAddress = ReadPaged(VectorLocation);
+    EffectiveAddress |= ReadPaged(VectorLocation + 1) << 8;
+  } else {
+    EffectiveAddress = ReadPaged(VectorLocation);
+    EffectiveAddress |= ReadPaged(VectorLocation - 255) << 8;
+  }
+  return EffectiveAddress;
+}
 
 /*-------------------------------------------------------------------------*/
 /* Zero page with Y offset addressing mode handler                         */
@@ -1074,6 +1070,14 @@ export function Exec6502Instruction() {
     // 	// Advance VIAs to point where mem read happens
     ViaCycles = 0;
     AdvanceCyclesForMemRead();
+
+    // if (159900 < tempInstCount && tempInstCount <= 160100) {
+    //   console.log(
+    //     tempInstCount,
+    //     ProgramCounter.toString(16),
+    //     CurrentInstruction.toString(16),
+    //   );
+    // }
 
     tempInstCount++;
 
@@ -1247,10 +1251,10 @@ export function Exec6502Instruction() {
       // 				ANDInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0x24:
-      // 			// BIT zp
-      // 			BITInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
-      // 			break;
+      case 0x24:
+        // BIT zp
+        BITInstrHandler(BEEBREADMEM_DIRECT(ReadPaged(ProgramCounter++)));
+        break;
       // 		case 0x25:
       // 			// AND zp
       // 			ANDInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
@@ -1266,21 +1270,21 @@ export function Exec6502Instruction() {
       // 				ANDInstrHandler(WholeRam[ZeroPageAddress]);
       // 			}
       // 			break;
-      // 		case 0x28: {
-      // 				// PLP
-      // 				unsigned char oldPSR = PSR;
-      // 				PSR = Pop();
+      case 0x28:
+        {
+          // PLP
+          const oldPSR = PSR;
+          PSR = Pop();
 
-      // 				if ((oldPSR ^ PSR) & FlagI) {
-      // 					if (PSR & FlagI) {
-      // 						iFlagJustSet = true;
-      // 					}
-      // 					else {
-      // 						iFlagJustCleared = true;
-      // 					}
-      // 				}
-      // 			}
-      // 			break;
+          if ((oldPSR ^ PSR) & FlagI) {
+            if (PSR & FlagI) {
+              iFlagJustSet = true;
+            } else {
+              iFlagJustCleared = true;
+            }
+          }
+        }
+        break;
       case 0x29:
         // AND imm
         ANDInstrHandler(ReadPaged(ProgramCounter++));
@@ -1289,10 +1293,11 @@ export function Exec6502Instruction() {
       // 			// ROL A
       // 			ROLInstrHandler_Acc();
       // 			break;
-      // 		case 0x2c:
-      // 			// BIT abs
-      // 			BITInstrHandler(AbsAddrModeHandler_Data());
-      // 			break;
+      case 0x2c:
+        // BIT abs
+        throw "not impl";
+        //BITInstrHandler(AbsAddrModeHandler_Data());
+        break;
       // 		case 0x2d:
       // 			// AND abs
       // 			ANDInstrHandler(AbsAddrModeHandler_Data());
@@ -1425,9 +1430,7 @@ export function Exec6502Instruction() {
         break;
       case 0x49:
         // EOR imm
-        console.log(getInstCount());
-        throw "not impl";
-        //EORInstrHandler(ReadPaged(ProgramCounter++));
+        EORInstrHandler(ReadPaged(ProgramCounter++));
         break;
       case 0x4a:
         // LSR A
@@ -1438,10 +1441,10 @@ export function Exec6502Instruction() {
       // 			ANDInstrHandler(ReadPaged(ProgramCounter++));
       // 			LSRInstrHandler_Acc();
       // 			break;
-      // 		case 0x4c:
-      // 			// JMP abs
-      // 			ProgramCounter = AbsAddrModeHandler_Address();
-      // 			break;
+      case 0x4c:
+        // JMP abs
+        ProgramCounter = AbsAddrModeHandler_Address();
+        break;
       // 		case 0x4d:
       // 			// EOR abs
       // 			EORInstrHandler(AbsAddrModeHandler_Data());
@@ -1457,10 +1460,10 @@ export function Exec6502Instruction() {
       // 				EORInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0x50:
-      // 			// BVC rel
-      // 			BVCInstrHandler();
-      // 			break;
+      case 0x50:
+        // BVC rel
+        BVCInstrHandler();
+        break;
       // 		case 0x51:
       // 			// EOR (zp),Y
       // 			EORInstrHandler(IndYAddrModeHandler_Data());
@@ -1497,13 +1500,13 @@ export function Exec6502Instruction() {
       // 				EORInstrHandler(WholeRam[ZeroPageAddress]);
       // 			}
       // 			break;
-      // 		case 0x58:
-      // 			// CLI
-      // 			if (PSR & FlagI) {
-      // 				iFlagJustCleared = true;
-      // 			}
-      // 			PSR &= 255 - FlagI;
-      // 			break;
+      case 0x58:
+        // CLI
+        if (PSR & FlagI) {
+          iFlagJustCleared = true;
+        }
+        PSR &= 255 - FlagI;
+        break;
       // 		case 0x59:
       // 			// EOR abs,Y
       // 			EORInstrHandler(AbsYAddrModeHandler_Data());
@@ -1590,10 +1593,11 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: ARR imm
       // 			ARRInstrHandler(ReadPaged(ProgramCounter++));
       // 			break;
-      // 		case 0x6c:
-      // 			// JMP (abs)
-      // 			ProgramCounter = IndAddrModeHandler_Address();
-      // 			break;
+      case 0x6c:
+        throw "not impl";
+        // JMP (abs)
+        ProgramCounter = IndAddrModeHandler_Address();
+        break;
       // 		case 0x6d:
       // 			// ADC abs
       // 			ADCInstrHandler(AbsAddrModeHandler_Data());
@@ -1728,11 +1732,11 @@ export function Exec6502Instruction() {
       // 			AdvanceCyclesForMemWrite();
       // 			WholeRam[ZeroPgAddrModeHandler_Address()] = Accumulator & XReg;
       // 			break;
-      // 		case 0x88:
-      // 			// DEY
-      // 			YReg = (YReg - 1) & 255;
-      // 			SetPSRZN(YReg);
-      // 			break;
+      case 0x88:
+        // DEY
+        YReg = (YReg - 1) & 255;
+        SetPSRZN(YReg);
+        break;
       // 		case 0x89:
       // 			// Undocumented instruction: NOP imm
       // 			ReadPaged(ProgramCounter++);
@@ -1767,10 +1771,10 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: SAX abs
       // 			WritePaged(AbsAddrModeHandler_Address(), Accumulator & XReg);
       // 			break;
-      // 		case 0x90:
-      // 			// BCC rel
-      // 			BCCInstrHandler();
-      // 			break;
+      case 0x90:
+        // BCC rel
+        BCCInstrHandler();
+        break;
       case 0x91:
         // STA (zp),Y
         AdvanceCyclesForMemWrite();
@@ -1792,11 +1796,11 @@ export function Exec6502Instruction() {
       // 			AdvanceCyclesForMemWrite();
       // 			STYInstrHandler(ZeroPgXAddrModeHandler_Address());
       // 			break;
-      // 		case 0x95:
-      // 			// STA zp,X
-      // 			AdvanceCyclesForMemWrite();
-      // 			WritePaged(ZeroPgXAddrModeHandler_Address(), Accumulator);
-      // 			break;
+      case 0x95:
+        // STA zp,X
+        AdvanceCyclesForMemWrite();
+        WritePaged(ZeroPgXAddrModeHandler_Address(), Accumulator);
+        break;
       // 		case 0x96:
       // 			// STX zp,X
       // 			AdvanceCyclesForMemWrite();
@@ -1807,16 +1811,17 @@ export function Exec6502Instruction() {
       // 			AdvanceCyclesForMemWrite();
       // 			WholeRam[ZeroPgYAddrModeHandler_Address()] = Accumulator & XReg;
       // 			break;
-      // 		case 0x98:
-      // 			// TYA
-      // 			Accumulator = YReg;
-      // 			SetPSRZN(Accumulator);
-      // 			break;
-      // 		case 0x99:
-      // 			// STA abs,Y
-      // 			AdvanceCyclesForMemWrite();
-      // 			WritePaged(AbsYAddrModeHandler_Address(), Accumulator);
-      // 			break;
+      case 0x98:
+        throw "not impl";
+        // TYA
+        Accumulator = YReg;
+        SetPSRZN(Accumulator);
+        break;
+      case 0x99:
+        // STA abs,Y
+        AdvanceCyclesForMemWrite();
+        WritePaged(AbsYAddrModeHandler_Address(), Accumulator);
+        break;
       case 0x9a:
         // TXS
         StackReg = XReg;
@@ -1831,11 +1836,11 @@ export function Exec6502Instruction() {
       // 				WritePaged(Address, YReg & (unsigned char)((Address >> 8) + 1));
       // 			}
       // 			break;
-      // 		case 0x9d:
-      // 			// STA abs,X
-      // 			AdvanceCyclesForMemWrite();
-      // 			WritePaged(AbsXAddrModeHandler_Address(), Accumulator);
-      // 			break;
+      case 0x9d:
+        // STA abs,X
+        AdvanceCyclesForMemWrite();
+        WritePaged(AbsXAddrModeHandler_Address(), Accumulator);
+        break;
       // 		case 0x9e:
       // 			// Undocumented instruction: SHX abs,Y
       // 			AdvanceCyclesForMemWrite();
@@ -1924,10 +1929,13 @@ export function Exec6502Instruction() {
         // BCS rel
         BCSInstrHandler();
         break;
-      // 		case 0xb1:
-      // 			// LDA (zp),Y
-      // 			LDAInstrHandler(IndYAddrModeHandler_Data());
-      // 			break;
+      case 0xb1:
+        console.log(getInstCount());
+        throw "not impl";
+
+        // LDA (zp),Y
+        LDAInstrHandler(IndYAddrModeHandler_Data());
+        break;
       // 		case 0xb2:
       // 			// Undocumented instruction: KIL
       // 			KILInstrHandler();
@@ -1958,15 +1966,16 @@ export function Exec6502Instruction() {
       // 			// CLV
       // 			PSR &= 255 - FlagV;
       // 			break;
-      // 		case 0xb9:
-      // 			// LDA abs,Y
-      // 			LDAInstrHandler(AbsYAddrModeHandler_Data());
-      // 			break;
-      // 		case 0xba:
-      // 			// TSX
-      // 			XReg = StackReg;
-      // 			SetPSRZN(XReg);
-      // 			break;
+      case 0xb9:
+        // LDA abs,Y
+        LDAInstrHandler(AbsYAddrModeHandler_Data());
+        break;
+      case 0xba:
+        throw "not impl";
+        // TSX
+        XReg = StackReg;
+        SetPSRZN(XReg);
+        break;
       // 		case 0xbb:
       // 			// Undocumented instruction: LAS abs,Y
       // 			LDAInstrHandler(StackReg & AbsYAddrModeHandler_Data());
@@ -1977,10 +1986,11 @@ export function Exec6502Instruction() {
       // 			// LDY abs,X
       // 			LDYInstrHandler(AbsXAddrModeHandler_Data());
       // 			break;
-      // 		case 0xbd:
-      // 			// LDA abs,X
-      // 			LDAInstrHandler(AbsXAddrModeHandler_Data());
-      // 			break;
+      case 0xbd:
+        throw "not impl";
+        // LDA abs,X
+        LDAInstrHandler(AbsXAddrModeHandler_Data());
+        break;
       // 		case 0xbe:
       // 			// LDX abs,Y
       // 			LDXInstrHandler(AbsYAddrModeHandler_Data());
@@ -2030,10 +2040,11 @@ export function Exec6502Instruction() {
         YReg &= 255;
         SetPSRZN(YReg);
         break;
-      // 		case 0xc9:
-      // 			// CMP imm
-      // 			CMPInstrHandler(ReadPaged(ProgramCounter++));
-      // 			break;
+      case 0xc9:
+        throw "not impl";
+        // CMP imm
+        CMPInstrHandler(ReadPaged(ProgramCounter++));
+        break;
       case 0xca:
         // DEX
         DEXInstrHandler();
@@ -2282,7 +2293,7 @@ export function Exec6502Instruction() {
     if (
       CurrentInstruction == 0x10 ||
       // CurrentInstruction == 0x30 ||
-      // CurrentInstruction == 0x50 ||
+      CurrentInstruction == 0x50 ||
       // CurrentInstruction == 0x70 ||
       // CurrentInstruction == 0x90 ||
       CurrentInstruction == 0xb0 ||

@@ -27,7 +27,9 @@ Boston, MA  02110-1301, USA.
 // IDE Interface: JGH jgh@mdfs.net 25/12/2011
 
 import { AdjustForIORead, AdjustForIOWrite, SyncIO } from "./6502core";
+import { SerialACIAWriteControl } from "./serial";
 import { getIC32State, SysVIARead, SysVIAWrite } from "./sysvia";
+import { UserVIAWrite } from "./uservia";
 import { VideoULARead, VideoULAWrite } from "./video";
 
 export function BEEBREADMEM_DIRECT(Address: number) {
@@ -306,11 +308,10 @@ export function BeebWriteMem(Address: number, Value: number) {
 
   /* Can write to a via using either of the two 16 bytes blocks */
   if ((Address & ~0xf) == 0xfe60 || (Address & ~0xf) == 0xfe70) {
-    throw "not impl";
-    // SyncIO();
-    // AdjustForIOWrite();
-    // UserVIAWrite(Address & 0xf, Value);
-    // return;
+    SyncIO();
+    AdjustForIOWrite();
+    UserVIAWrite(Address & 0xf, Value);
+    return;
   }
 
   if ((Address & ~0x7) == 0xfe00) {
@@ -322,11 +323,10 @@ export function BeebWriteMem(Address: number, Value: number) {
   }
 
   if (Address == 0xfe08) {
-    throw "not impl";
-    // SyncIO();
-    // AdjustForIOWrite();
-    // SerialACIAWriteControl(Value);
-    // return;
+    SyncIO();
+    AdjustForIOWrite();
+    SerialACIAWriteControl(Value);
+    return;
   }
 
   if (Address == 0xfe09) {

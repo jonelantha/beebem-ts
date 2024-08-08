@@ -66,7 +66,7 @@ if (!memFile) throw "no mem param";
 
   const start = performance.now();
 
-  while (performance.now() - start < 1000) {
+  while (performance.now() - start < 500) {
     const sleepTime = Exec6502Instruction();
     if (sleepTime) await new Promise<void>(res => setTimeout(res, sleepTime));
   }
