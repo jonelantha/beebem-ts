@@ -30,9 +30,11 @@ Boston, MA  02110-1301, USA.
 // 26/12/2011: Added IDE Drive to Hardware options, JGH
 
 import { getTotalCycles, Init6502core } from "./6502core";
+import { AtoDInit } from "./atodconv";
 import { BeebMemInit } from "./beebmem";
 import { bufferHeight, bufferWidth, InitSurfaces } from "./beebwindx";
 import { REAL_TIME_TARGET } from "./beebwinh";
+import { Disc8271Reset } from "./disc8271";
 import { SysVIAReset } from "./sysvia";
 import { UserVIAReset } from "./uservia";
 import { BuildMode7Font, VideoInit } from "./video";
@@ -71,12 +73,20 @@ async function ApplyPrefs() {
 /****************************************************************************/
 
 async function ResetBeebSystem(LoadRoms: boolean) {
+  // SoundReset();
+  // SoundInit();
+  // SwitchOnSound();
   await BeebMemInit(LoadRoms);
   Init6502core();
 
   SysVIAReset();
   UserVIAReset();
   VideoInit();
+  Disc8271Reset();
+  AtoDInit();
+  // 	FreeDiscImage(0);
+  // 	// Keep the disc images loaded
+  // 	FreeDiscImage(1);
 }
 
 /****************************************************************************/

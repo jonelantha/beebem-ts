@@ -20,12 +20,15 @@ Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 Boston, MA  02110-1301, USA.
 ****************************************************************/
 
+import { AtoD_poll } from "./atodconv";
 import {
   BeebReadMem,
   BEEBREADMEM_DIRECT,
   BeebWriteMem,
   BEEBWRITEMEM_DIRECT,
 } from "./beebmem";
+import { Disc8271Poll } from "./disc8271";
+import { SerialPoll } from "./serial";
 import { SysVIA_poll } from "./sysvia";
 import { UserVIA_poll } from "./uservia";
 import { VideoPoll } from "./video";
@@ -61,8 +64,12 @@ export const ClearTrigger = () => CycleCountTMax;
 
 const charToSignedChar = (char: number) => (char & 0x80 ? char - 0x100 : char);
 const intToUnsignedChar = (val: number) => {
-  if (val > 127 || val < -128) throw "out of range";
+  if (val > 127 || val < -128) throw `out of range ${val.toString(16)}`;
   return val >= 0 ? val : val + 0x100;
+};
+const charToUnsignedChar = (val: number) => {
+  if (val > 0xff || val < -0xff) throw `out of range ${val.toString(16)}`;
+  return val >= 0 ? val : val + 0xff;
 };
 
 // main
@@ -360,50 +367,55 @@ function RelAddrModeHandler_Data() {
 
 /*----------------------------------------------------------------------------*/
 
-// INLINE static void ADCInstrHandler(int operand)
-// {
-//   /* NOTE! Not sure about C and V flags */
-//   if (!GETDFLAG) {
-//     int TmpResultC = Accumulator + operand + GETCFLAG;
-//     int TmpResultV = (signed char)Accumulator + (signed char)operand + GETCFLAG;
-//     Accumulator = TmpResultC & 255;
-//     SetPSR(FlagC | FlagZ | FlagV | FlagN, (TmpResultC & 256) > 0,
-//       Accumulator == 0, 0, 0, 0, ((Accumulator & 128) > 0) ^ (TmpResultV < 0),
-//       Accumulator & 128);
-//   } else {
-//     /* Z flag determined from 2's compl result, not BCD result! */
-//     int TmpResult = Accumulator + operand + GETCFLAG;
-//     int ZFlag = (TmpResult & 0xff) == 0;
-
-//     int ln = (Accumulator & 0xf) + (operand & 0xf) + GETCFLAG;
-
-//     int TmpCarry = 0;
-
-//     if (ln > 9) {
-//       ln += 6;
-//       ln &= 0xf;
-//       TmpCarry = 0x10;
-//     }
-
-//     int hn = (Accumulator & 0xf0) + (operand & 0xf0) + TmpCarry;
-//     /* N and V flags are determined before high nibble is adjusted.
-//        NOTE: V is not always correct */
-//     int NFlag = hn & 128;
-//     int VFlag = (hn ^ Accumulator) & 128 && !((Accumulator ^ operand) & 128);
-
-//     int CFlag = 0;
-
-//     if (hn > 0x90) {
-//       hn += 0x60;
-//       hn &= 0xf0;
-//       CFlag = 1;
-//     }
-
-//     Accumulator = hn | ln;
-
-//     SetPSR(FlagC | FlagZ | FlagV | FlagN, CFlag, ZFlag, 0, 0, 0, VFlag, NFlag);
-//   }
-// } /* ADCInstrHandler */
+/**
+ * @param operand int
+ */
+function ADCInstrHandler(operand: number) {
+  /* NOTE! Not sure about C and V flags */
+  if (!GETDFLAG()) {
+    const TmpResultC = Accumulator + operand + (GETCFLAG() ? 1 : 0);
+    const TmpResultV =
+      charToSignedChar(Accumulator) +
+      charToSignedChar(operand) +
+      (GETCFLAG() ? 1 : 0);
+    Accumulator = TmpResultC & 255;
+    SetPSR(
+      FlagC | FlagZ | FlagV | FlagN,
+      (TmpResultC & 256) > 0 ? 1 : 0,
+      Accumulator == 0 ? 1 : 0,
+      0,
+      0,
+      0,
+      ((Accumulator & 128) > 0 ? 1 : 0) ^ (TmpResultV < 0 ? 1 : 0) ? 1 : 0,
+      Accumulator & 128 ? 128 : 0,
+    );
+  } else {
+    throw "not impl 2";
+    /* Z flag determined from 2's compl result, not BCD result! */
+    // int TmpResult = Accumulator + operand + GETCFLAG;
+    // int ZFlag = (TmpResult & 0xff) == 0;
+    // int ln = (Accumulator & 0xf) + (operand & 0xf) + GETCFLAG;
+    // int TmpCarry = 0;
+    // if (ln > 9) {
+    //   ln += 6;
+    //   ln &= 0xf;
+    //   TmpCarry = 0x10;
+    // }
+    // int hn = (Accumulator & 0xf0) + (operand & 0xf0) + TmpCarry;
+    // /* N and V flags are determined before high nibble is adjusted.
+    //    NOTE: V is not always correct */
+    // int NFlag = hn & 128;
+    // int VFlag = (hn ^ Accumulator) & 128 && !((Accumulator ^ operand) & 128);
+    // int CFlag = 0;
+    // if (hn > 0x90) {
+    //   hn += 0x60;
+    //   hn &= 0xf0;
+    //   CFlag = 1;
+    // }
+    // Accumulator = hn | ln;
+    // SetPSR(FlagC | FlagZ | FlagV | FlagN, CFlag, ZFlag, 0, 0, 0, VFlag, NFlag);
+  }
+} /* ADCInstrHandler */
 
 /*----------------------------------------------------------------------------*/
 
@@ -416,19 +428,24 @@ function ANDInstrHandler(operand: number) {
   PSR |= ((Accumulator == 0 ? 1 : 0) << 1) | (Accumulator & 128);
 }
 
-// INLINE static void ASLInstrHandler(int address)
-// {
-//   unsigned char oldVal,newVal;
-//   oldVal=ReadPaged(address);
-//   Cycles+=1;
-//   PollVIAs(1);
-//   WritePaged(address,oldVal);
-//   newVal=(((unsigned int)oldVal)<<1) & 254;
-//   Cycles+=CyclesToMemWrite[CurrentInstruction] - 1;
-//   PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
-//   WritePaged(address,newVal);
-//   SetPSRCZN((oldVal & 128)>0, newVal==0,newVal & 128);
-// } /* ASLInstrHandler */
+/**
+ * @param address int
+ */
+function ASLInstrHandler(address: number) {
+  const oldVal = ReadPaged(address);
+  Cycles += 1;
+  PollVIAs(1);
+  WritePaged(address, oldVal);
+  const newVal = /*(unsigned int)*/ (oldVal << 1) & 254;
+  Cycles += CyclesToMemWrite[CurrentInstruction] - 1;
+  PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
+  WritePaged(address, newVal);
+  SetPSRCZN(
+    (oldVal & 128) > 0 ? 1 : 0,
+    newVal == 0 ? 1 : 0,
+    newVal & 128 ? 128 : 0,
+  );
+} /* ASLInstrHandler */
 
 function ASLInstrHandler_Acc() {
   let oldVal: number; // unsigned char
@@ -473,12 +490,12 @@ function BITInstrHandler(operand: number) {
   PSR |= (((Accumulator & operand) == 0 ? 1 : 0) << 1) | (operand & 192);
 }
 
-// INLINE static void BMIInstrHandler(void) {
-//   if (GETNFLAG) {
-//     ProgramCounter=RelAddrModeHandler_Data();
-//     Branched = true;
-//   } else ProgramCounter++;
-// } /* BMIInstrHandler */
+function BMIInstrHandler() {
+  if (GETNFLAG()) {
+    ProgramCounter = RelAddrModeHandler_Data();
+    Branched = true;
+  } else ProgramCounter++;
+} /* BMIInstrHandler */
 
 function BNEInstrHandler() {
   if (!GETZFLAG()) {
@@ -539,24 +556,32 @@ function CPXInstrHandler(operand: number) {
   );
 }
 
-// INLINE static void CPYInstrHandler(int operand)
-// {
-//   unsigned char result = static_cast<unsigned char>(YReg - operand);
-//   SetPSRCZN(YReg>=operand,YReg==operand,result & 128);
-// }
+/**
+ * @param operand int
+ */
+function CPYInstrHandler(operand: number) {
+  const result = intToUnsignedChar(YReg - operand);
+  SetPSRCZN(
+    YReg >= operand ? 1 : 0,
+    YReg == operand ? 1 : 0,
+    result & 128 ? 128 : 0,
+  );
+}
 
-// INLINE static void DECInstrHandler(int address)
-// {
-//   unsigned char val = ReadPaged(address);
-//   Cycles+=1;
-//   PollVIAs(1);
-//   WritePaged(address,val);
-//   val=(val-1);
-//   Cycles+=CyclesToMemWrite[CurrentInstruction] - 1;
-//   PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
-//   WritePaged(address,val);
-//   SetPSRZN(val);
-// }
+/**
+ * @param address int
+ */
+function DECInstrHandler(address: number) {
+  let val = ReadPaged(address); // unsigned char
+  Cycles += 1;
+  PollVIAs(1);
+  WritePaged(address, val);
+  val = charToUnsignedChar(val - 1);
+  Cycles += CyclesToMemWrite[CurrentInstruction] - 1;
+  PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
+  WritePaged(address, val);
+  SetPSRZN(val);
+}
 
 function DEXInstrHandler() {
   XReg = (XReg - 1) & 255;
@@ -621,18 +646,20 @@ function LDYInstrHandler(operand: number) {
   SetPSRZN(YReg);
 }
 
-// INLINE static void LSRInstrHandler(int address)
-// {
-//   unsigned char oldVal = ReadPaged(address);
-//   Cycles+=1;
-//   PollVIAs(1);
-//   WritePaged(address,oldVal);
-//   unsigned char newVal = (((unsigned int)oldVal) >> 1) & 127;
-//   Cycles+=CyclesToMemWrite[CurrentInstruction] - 1;
-//   PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
-//   WritePaged(address,newVal);
-//   SetPSRCZN((oldVal & 1)>0, newVal==0,0);
-// } /* LSRInstrHandler */
+/**
+ * @param address int
+ */
+function LSRInstrHandler(address: number) {
+  const oldVal = ReadPaged(address); // unsigned char
+  Cycles += 1;
+  PollVIAs(1);
+  WritePaged(address, oldVal);
+  const newVal = /*(unsigned int)*/ (oldVal >> 1) & 127;
+  Cycles += CyclesToMemWrite[CurrentInstruction] - 1;
+  PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
+  WritePaged(address, newVal);
+  SetPSRCZN((oldVal & 1) > 0 ? 1 : 0, newVal == 0 ? 1 : 0, 0);
+} /* LSRInstrHandler */
 
 function LSRInstrHandler_Acc() {
   /* Accumulator */
@@ -704,58 +731,61 @@ function RORInstrHandler_Acc() {
   SetPSRCZN(oldVal & 1 ? 1 : 0, newVal == 0 ? 1 : 0, newVal & 128 ? 128 : 0);
 }
 
-// INLINE static void SBCInstrHandler(int operand)
-// {
-//   /* NOTE! Not sure about C and V flags */
-//   if (!GETDFLAG) {
-//     int TmpResultV = (signed char)Accumulator - (signed char)operand - (1 - GETCFLAG);
-//     int TmpResultC = Accumulator - operand - (1 - GETCFLAG);
-//     Accumulator = TmpResultC & 255;
-//     SetPSR(FlagC | FlagZ | FlagV | FlagN, TmpResultC >= 0,
-//       Accumulator == 0, 0, 0, 0,
-//       ((Accumulator & 128) > 0) ^ ((TmpResultV & 256) != 0),
-//       Accumulator & 128);
-//   } else {
-//     /* Z flag determined from 2's compl result, not BCD result! */
-//     int TmpResult = Accumulator - operand - (1 - GETCFLAG);
-//     int ZFlag = ((TmpResult & 0xff) == 0);
-
-//     int ohn = operand & 0xf0;
-//     int oln = operand & 0xf;
-
-//     int ln = (Accumulator & 0xf) - oln - (1 - GETCFLAG);
-//     if (ln & 0x10) {
-// 		ln -= 6;
-//     }
-
-//     int TmpCarry = 0;
-
-//     if (ln & 0x20) {
-// 		TmpCarry = 0x10;
-//     }
-
-//     ln &= 0xf;
-//     int hn = (Accumulator & 0xf0) - ohn - TmpCarry;
-//     /* N and V flags are determined before high nibble is adjusted.
-//         NOTE: V is not always correct */
-//     int NFlag = hn & 128;
-
-//     int TmpResultV = (signed char)Accumulator - (signed char)operand - (1 - GETCFLAG);
-//     int VFlag = ((TmpResultV < -128) || (TmpResultV > 127));
-
-//     int CFlag = 1;
-
-//     if (hn & 0x100) {
-// 		hn -= 0x60;
-// 		hn &= 0xf0;
-// 		CFlag = 0;
-//     }
-
-//     Accumulator = hn | ln;
-
-//     SetPSR(FlagC | FlagZ | FlagV | FlagN, CFlag, ZFlag, 0, 0, 0, VFlag, NFlag);
-//   }
-// } /* SBCInstrHandler */
+/**
+ * @param operand int
+ */
+function SBCInstrHandler(operand: number) {
+  /* NOTE! Not sure about C and V flags */
+  if (!GETDFLAG()) {
+    const TmpResultV =
+      charToSignedChar(Accumulator) -
+      charToSignedChar(operand) -
+      (1 - (GETCFLAG() ? 1 : 0));
+    const TmpResultC = Accumulator - operand - (1 - (GETCFLAG() ? 1 : 0));
+    Accumulator = TmpResultC & 255;
+    SetPSR(
+      FlagC | FlagZ | FlagV | FlagN,
+      TmpResultC >= 0 ? 1 : 0,
+      Accumulator == 0 ? 1 : 0,
+      0,
+      0,
+      0,
+      ((Accumulator & 128) > 0 ? 1 : 0) ^ ((TmpResultV & 256) != 0 ? 1 : 0)
+        ? 1
+        : 0,
+      Accumulator & 128 ? 128 : 0,
+    );
+  } else {
+    /* Z flag determined from 2's compl result, not BCD result! */
+    // int TmpResult = Accumulator - operand - (1 - GETCFLAG);
+    // int ZFlag = ((TmpResult & 0xff) == 0);
+    // int ohn = operand & 0xf0;
+    // int oln = operand & 0xf;
+    // int ln = (Accumulator & 0xf) - oln - (1 - GETCFLAG);
+    // if (ln & 0x10) {
+    // ln -= 6;
+    // }
+    // int TmpCarry = 0;
+    // if (ln & 0x20) {
+    // TmpCarry = 0x10;
+    // }
+    // ln &= 0xf;
+    // int hn = (Accumulator & 0xf0) - ohn - TmpCarry;
+    // /* N and V flags are determined before high nibble is adjusted.
+    //     NOTE: V is not always correct */
+    // int NFlag = hn & 128;
+    // int TmpResultV = (signed char)Accumulator - (signed char)operand - (1 - GETCFLAG);
+    // int VFlag = ((TmpResultV < -128) || (TmpResultV > 127));
+    // int CFlag = 1;
+    // if (hn & 0x100) {
+    // hn -= 0x60;
+    // hn &= 0xf0;
+    // CFlag = 0;
+    // }
+    // Accumulator = hn | ln;
+    // SetPSR(FlagC | FlagZ | FlagV | FlagN, CFlag, ZFlag, 0, 0, 0, VFlag, NFlag);
+  }
+} /* SBCInstrHandler */
 
 /**
  * @param address int
@@ -1071,7 +1101,7 @@ export function Exec6502Instruction() {
     ViaCycles = 0;
     AdvanceCyclesForMemRead();
 
-    // if (159900 < tempInstCount && tempInstCount <= 160100) {
+    // if (165040 < tempInstCount && tempInstCount <= 165050) {
     //   console.log(
     //     tempInstCount,
     //     ProgramCounter.toString(16),
@@ -1146,10 +1176,10 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: NOP abs
       // 			AbsAddrModeHandler_Address();
       // 			break;
-      // 		case 0x0d:
-      // 			// ORA abs
-      // 			ORAInstrHandler(AbsAddrModeHandler_Data());
-      // 			break;
+      case 0x0d:
+        // ORA abs
+        ORAInstrHandler(AbsAddrModeHandler_Data());
+        break;
       // 		case 0x0e:
       // 			// ASL abs
       // 			ASLInstrHandler(AbsAddrModeHandler_Address());
@@ -1199,10 +1229,10 @@ export function Exec6502Instruction() {
       // 				ORAInstrHandler(WholeRam[ZeroPageAddress]);
       // 			}
       // 			break;
-      // 		case 0x18:
-      // 			// CLC
-      // 			PSR &= 255 - FlagC;
-      // 			break;
+      case 0x18:
+        // CLC
+        PSR &= 255 - FlagC;
+        break;
       // 		case 0x19:
       // 			// ORA abs,Y
       // 			ORAInstrHandler(AbsYAddrModeHandler_Data());
@@ -1221,14 +1251,14 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: NOP abs,X
       // 			AbsXAddrModeHandler_Data();
       // 			break;
-      // 		case 0x1d:
-      // 			// ORA abs,X
-      // 			ORAInstrHandler(AbsXAddrModeHandler_Data());
-      // 			break;
-      // 		case 0x1e:
-      // 			// ASL abs,X
-      // 			ASLInstrHandler(AbsXAddrModeHandler_Address());
-      // 			break;
+      case 0x1d:
+        // ORA abs,X
+        ORAInstrHandler(AbsXAddrModeHandler_Data());
+        break;
+      case 0x1e:
+        // ASL abs,X
+        ASLInstrHandler(AbsXAddrModeHandler_Address());
+        break;
       // 		case 0x1f: {
       // 				// Undocumented instruction: SLO abs,X
       // 				int Address = AbsXAddrModeHandler_Address();
@@ -1255,10 +1285,10 @@ export function Exec6502Instruction() {
         // BIT zp
         BITInstrHandler(BEEBREADMEM_DIRECT(ReadPaged(ProgramCounter++)));
         break;
-      // 		case 0x25:
-      // 			// AND zp
-      // 			ANDInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
-      // 			break;
+      case 0x25:
+        // AND zp
+        ANDInstrHandler(BEEBREADMEM_DIRECT(ReadPaged(ProgramCounter++)));
+        break;
       case 0x26:
         // ROL zp
         ROLInstrHandler(ZeroPgAddrModeHandler_Address());
@@ -1295,13 +1325,12 @@ export function Exec6502Instruction() {
       // 			break;
       case 0x2c:
         // BIT abs
-        throw "not impl";
-        //BITInstrHandler(AbsAddrModeHandler_Data());
+        BITInstrHandler(AbsAddrModeHandler_Data());
         break;
-      // 		case 0x2d:
-      // 			// AND abs
-      // 			ANDInstrHandler(AbsAddrModeHandler_Data());
-      // 			break;
+      case 0x2d:
+        // AND abs
+        ANDInstrHandler(AbsAddrModeHandler_Data());
+        break;
       // 		case 0x2e:
       // 			// ROL abs
       // 			ROLInstrHandler(AbsAddrModeHandler_Address());
@@ -1313,10 +1342,10 @@ export function Exec6502Instruction() {
       // 				ANDInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0x30:
-      // 			// BMI rel
-      // 			BMIInstrHandler();
-      // 			break;
+      case 0x30:
+        // BMI rel
+        BMIInstrHandler();
+        break;
       // 		case 0x31:
       // 			// AND (zp),Y
       // 			ANDInstrHandler(IndYAddrModeHandler_Data());
@@ -1351,10 +1380,10 @@ export function Exec6502Instruction() {
       // 				ANDInstrHandler(WholeRam[ZeroPageAddress]);
       // 			}
       // 			break;
-      // 		case 0x38:
-      // 			// SEC
-      // 			PSR |= FlagC;
-      // 			break;
+      case 0x38:
+        // SEC
+        PSR |= FlagC;
+        break;
       // 		case 0x39:
       // 			// AND abs,Y
       // 			ANDInstrHandler(AbsYAddrModeHandler_Data());
@@ -1377,10 +1406,10 @@ export function Exec6502Instruction() {
       // 			// AND abs,X
       // 			ANDInstrHandler(AbsXAddrModeHandler_Data());
       // 			break;
-      // 		case 0x3e:
-      // 			// ROL abs,X
-      // 			ROLInstrHandler(AbsXAddrModeHandler_Address());
-      // 			break;
+      case 0x3e:
+        // ROL abs,X
+        ROLInstrHandler(AbsXAddrModeHandler_Address());
+        break;
       // 		case 0x3f: {
       // 				// Undocumented instruction: RLA abs.X
       // 				int Address = AbsXAddrModeHandler_Address();
@@ -1413,10 +1442,10 @@ export function Exec6502Instruction() {
       // 			// EOR zp
       // 			EORInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
       // 			break;
-      // 		case 0x46:
-      // 			// LSR zp
-      // 			LSRInstrHandler(ZeroPgAddrModeHandler_Address());
-      // 			break;
+      case 0x46:
+        // LSR zp
+        LSRInstrHandler(ZeroPgAddrModeHandler_Address());
+        break;
       // 		case 0x47: {
       // 				// Undocumented instruction: SRE zp
       // 				int ZeroPageAddress = ZeroPgAddrModeHandler_Address();
@@ -1445,14 +1474,14 @@ export function Exec6502Instruction() {
         // JMP abs
         ProgramCounter = AbsAddrModeHandler_Address();
         break;
-      // 		case 0x4d:
-      // 			// EOR abs
-      // 			EORInstrHandler(AbsAddrModeHandler_Data());
-      // 			break;
-      // 		case 0x4e:
-      // 			// LSR abs
-      // 			LSRInstrHandler(AbsAddrModeHandler_Address());
-      // 			break;
+      case 0x4d:
+        // EOR abs
+        EORInstrHandler(AbsAddrModeHandler_Data());
+        break;
+      case 0x4e:
+        // LSR abs
+        LSRInstrHandler(AbsAddrModeHandler_Address());
+        break;
       // 		case 0x4f: {
       // 				// Undocumented instruction: SRE abs
       // 				int Address = AbsAddrModeHandler_Address();
@@ -1581,10 +1610,10 @@ export function Exec6502Instruction() {
         Accumulator = Pop();
         SetPSRZN(Accumulator);
         break;
-      // 		case 0x69:
-      // 			// ADC imm
-      // 			ADCInstrHandler(ReadPaged(ProgramCounter++));
-      // 			break;
+      case 0x69:
+        // ADC imm
+        ADCInstrHandler(ReadPaged(ProgramCounter++));
+        break;
       case 0x6a:
         // ROR A
         RORInstrHandler_Acc();
@@ -1594,14 +1623,13 @@ export function Exec6502Instruction() {
       // 			ARRInstrHandler(ReadPaged(ProgramCounter++));
       // 			break;
       case 0x6c:
-        throw "not impl";
         // JMP (abs)
         ProgramCounter = IndAddrModeHandler_Address();
         break;
-      // 		case 0x6d:
-      // 			// ADC abs
-      // 			ADCInstrHandler(AbsAddrModeHandler_Data());
-      // 			break;
+      case 0x6d:
+        // ADC abs
+        ADCInstrHandler(AbsAddrModeHandler_Data());
+        break;
       // 		case 0x6e:
       // 			// ROR abs
       // 			RORInstrHandler(AbsAddrModeHandler_Address());
@@ -1658,10 +1686,10 @@ export function Exec6502Instruction() {
         }
         PSR |= FlagI;
         break;
-      // 		case 0x79:
-      // 			// ADC abs,Y
-      // 			ADCInstrHandler(AbsYAddrModeHandler_Data());
-      // 			break;
+      case 0x79:
+        // ADC abs,Y
+        ADCInstrHandler(AbsYAddrModeHandler_Data());
+        break;
       // 		case 0x7a:
       // 			// Undocumented instruction: NOP
       // 			break;
@@ -1676,14 +1704,14 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: NOP abs,X
       // 			AbsXAddrModeHandler_Data();
       // 			break;
-      // 		case 0x7d:
-      // 			// ADC abs,X
-      // 			ADCInstrHandler(AbsXAddrModeHandler_Data());
-      // 			break;
-      // 		case 0x7e:
-      // 			// ROR abs,X
-      // 			RORInstrHandler(AbsXAddrModeHandler_Address());
-      // 			break;
+      case 0x7d:
+        // ADC abs,X
+        ADCInstrHandler(AbsXAddrModeHandler_Data());
+        break;
+      case 0x7e:
+        // ROR abs,X
+        RORInstrHandler(AbsXAddrModeHandler_Address());
+        break;
       // 		case 0x7f: {
       // 				// Undocumented instruction: RRA abs,X
       // 				int Address = AbsXAddrModeHandler_Address();
@@ -1711,11 +1739,11 @@ export function Exec6502Instruction() {
       // 			AdvanceCyclesForMemWrite();
       // 			WritePaged(IndXAddrModeHandler_Address(), Accumulator & XReg);
       // 			break;
-      // 		case 0x84:
-      // 			// STY zp
-      // 			AdvanceCyclesForMemWrite();
-      // 			BEEBWRITEMEM_DIRECT(ZeroPgAddrModeHandler_Address(), YReg);
-      // 			break;
+      case 0x84:
+        // STY zp
+        AdvanceCyclesForMemWrite();
+        BEEBWRITEMEM_DIRECT(ZeroPgAddrModeHandler_Address(), YReg);
+        break;
       case 0x85:
         // STA zp
         AdvanceCyclesForMemWrite();
@@ -1801,18 +1829,19 @@ export function Exec6502Instruction() {
         AdvanceCyclesForMemWrite();
         WritePaged(ZeroPgXAddrModeHandler_Address(), Accumulator);
         break;
-      // 		case 0x96:
-      // 			// STX zp,X
-      // 			AdvanceCyclesForMemWrite();
-      // 			STXInstrHandler(ZeroPgYAddrModeHandler_Address());
-      // 			break;
+      case 0x96:
+      // STX zp,X
+      // console.log(getInstCount());
+      // throw "not impl";
+      // AdvanceCyclesForMemWrite();
+      // STXInstrHandler(ZeroPgYAddrModeHandler_Address());
+      //break;
       // 		case 0x97:
       // 			// Undocumented instruction: SAX zp,Y
       // 			AdvanceCyclesForMemWrite();
       // 			WholeRam[ZeroPgYAddrModeHandler_Address()] = Accumulator & XReg;
       // 			break;
       case 0x98:
-        throw "not impl";
         // TYA
         Accumulator = YReg;
         SetPSRZN(Accumulator);
@@ -1870,18 +1899,18 @@ export function Exec6502Instruction() {
       // 			LDAInstrHandler(IndXAddrModeHandler_Data());
       // 			XReg = Accumulator;
       // 			break;
-      // 		case 0xa4:
-      // 			// LDY zp
-      // 			LDYInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
-      // 			break;
+      case 0xa4:
+        // LDY zp
+        LDYInstrHandler(BEEBREADMEM_DIRECT(ReadPaged(ProgramCounter++)));
+        break;
       case 0xa5:
         // LDA zp
         LDAInstrHandler(BEEBREADMEM_DIRECT(ReadPaged(ProgramCounter++)));
         break;
-      // 		case 0xa6:
-      // 			// LDX zp
-      // 			LDXInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
-      // 			break;
+      case 0xa6:
+        // LDX zp
+        LDXInstrHandler(BEEBREADMEM_DIRECT(ReadPaged(ProgramCounter++)));
+        break;
       // 		case 0xa7: {
       // 				// Undocumented instruction: LAX zp
       // 				int ZeroPageAddress = ReadPaged(ProgramCounter++);
@@ -1908,10 +1937,10 @@ export function Exec6502Instruction() {
       // 			LDAInstrHandler(Accumulator & ReadPaged(ProgramCounter++));
       // 			XReg = Accumulator;
       // 			break;
-      // 		case 0xac:
-      // 			// LDY abs
-      // 			LDYInstrHandler(AbsAddrModeHandler_Data());
-      // 			break;
+      case 0xac:
+        // LDY abs
+        LDYInstrHandler(AbsAddrModeHandler_Data());
+        break;
       case 0xad:
         // LDA abs
         LDAInstrHandler(AbsAddrModeHandler_Data());
@@ -1930,9 +1959,6 @@ export function Exec6502Instruction() {
         BCSInstrHandler();
         break;
       case 0xb1:
-        console.log(getInstCount());
-        throw "not impl";
-
         // LDA (zp),Y
         LDAInstrHandler(IndYAddrModeHandler_Data());
         break;
@@ -1971,8 +1997,6 @@ export function Exec6502Instruction() {
         LDAInstrHandler(AbsYAddrModeHandler_Data());
         break;
       case 0xba:
-        throw "not impl";
-        // TSX
         XReg = StackReg;
         SetPSRZN(XReg);
         break;
@@ -1982,28 +2006,26 @@ export function Exec6502Instruction() {
       // 			XReg = Accumulator;
       // 			StackReg = Accumulator;
       // 			break;
-      // 		case 0xbc:
-      // 			// LDY abs,X
-      // 			LDYInstrHandler(AbsXAddrModeHandler_Data());
-      // 			break;
+      case 0xbc:
+        // LDY abs,X
+        LDYInstrHandler(AbsXAddrModeHandler_Data());
+        break;
       case 0xbd:
-        throw "not impl";
-        // LDA abs,X
         LDAInstrHandler(AbsXAddrModeHandler_Data());
         break;
-      // 		case 0xbe:
-      // 			// LDX abs,Y
-      // 			LDXInstrHandler(AbsYAddrModeHandler_Data());
-      // 			break;
+      case 0xbe:
+        // LDX abs,Y
+        LDXInstrHandler(AbsYAddrModeHandler_Data());
+        break;
       // 		case 0xbf:
       // 			// Undocumented instruction: LAX abs,Y
       // 			LDAInstrHandler(AbsYAddrModeHandler_Data());
       // 			XReg = Accumulator;
       // 			break;
-      // 		case 0xc0:
-      // 			// CPY imm
-      // 			CPYInstrHandler(ReadPaged(ProgramCounter++));
-      // 			break;
+      case 0xc0:
+        // CPY imm
+        CPYInstrHandler(ReadPaged(ProgramCounter++));
+        break;
       // 		case 0xc1:
       // 			// CMP (zp,X)
       // 			CMPInstrHandler(IndXAddrModeHandler_Data());
@@ -2023,10 +2045,10 @@ export function Exec6502Instruction() {
         // CMP zp
         CMPInstrHandler(BEEBREADMEM_DIRECT(ReadPaged(ProgramCounter++)));
         break;
-      // 		case 0xc6:
-      // 			// DEC zp
-      // 			DECInstrHandler(ZeroPgAddrModeHandler_Address());
-      // 			break;
+      case 0xc6:
+        // DEC zp
+        DECInstrHandler(ZeroPgAddrModeHandler_Address());
+        break;
       // 		case 0xc7: {
       // 				// Undocumented instruction: DCP zp
       // 				int ZeroPageAddress = ZeroPgAddrModeHandler_Address();
@@ -2041,7 +2063,6 @@ export function Exec6502Instruction() {
         SetPSRZN(YReg);
         break;
       case 0xc9:
-        throw "not impl";
         // CMP imm
         CMPInstrHandler(ReadPaged(ProgramCounter++));
         break;
@@ -2063,14 +2084,14 @@ export function Exec6502Instruction() {
       // 			// CPY abs
       // 			CPYInstrHandler(AbsAddrModeHandler_Data());
       // 			break;
-      // 		case 0xcd:
-      // 			// CMP abs
-      // 			CMPInstrHandler(AbsAddrModeHandler_Data());
-      // 			break;
-      // 		case 0xce:
-      // 			// DEC abs
-      // 			DECInstrHandler(AbsAddrModeHandler_Address());
-      // 			break;
+      case 0xcd:
+        // CMP abs
+        CMPInstrHandler(AbsAddrModeHandler_Data());
+        break;
+      case 0xce:
+        // DEC abs
+        DECInstrHandler(AbsAddrModeHandler_Address());
+        break;
       // 		case 0xcf: {
       // 				// Undocumented instruction: DCP abs
       // 				int Address = AbsAddrModeHandler_Address();
@@ -2082,10 +2103,10 @@ export function Exec6502Instruction() {
         // BNE rel
         BNEInstrHandler();
         break;
-      // 		case 0xd1:
-      // 			// CMP (zp),Y
-      // 			CMPInstrHandler(IndYAddrModeHandler_Data());
-      // 			break;
+      case 0xd1:
+        // CMP (zp),Y
+        CMPInstrHandler(IndYAddrModeHandler_Data());
+        break;
       // 		case 0xd2:
       // 			// Undocumented instruction: KIL
       // 			KILInstrHandler();
@@ -2135,14 +2156,14 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: NOP abs,X
       // 			AbsXAddrModeHandler_Data();
       // 			break;
-      // 		case 0xdd:
-      // 			// CMP abs,X
-      // 			CMPInstrHandler(AbsXAddrModeHandler_Data());
-      // 			break;
-      // 		case 0xde:
-      // 			// DEC abs,X
-      // 			DECInstrHandler(AbsXAddrModeHandler_Address());
-      // 			break;
+      case 0xdd:
+        // CMP abs,X
+        CMPInstrHandler(AbsXAddrModeHandler_Data());
+        break;
+      case 0xde:
+        // DEC abs,X
+        DECInstrHandler(AbsXAddrModeHandler_Address());
+        break;
       // 		case 0xdf: {
       // 				// Undocumented instruction: DCP abs,X
       // 				int Address = AbsXAddrModeHandler_Address();
@@ -2188,10 +2209,10 @@ export function Exec6502Instruction() {
         // INX
         INXInstrHandler();
         break;
-      // 		case 0xe9:
-      // 			// SBC imm
-      // 			SBCInstrHandler(ReadPaged(ProgramCounter++));
-      // 			break;
+      case 0xe9:
+        // SBC imm
+        SBCInstrHandler(ReadPaged(ProgramCounter++));
+        break;
       // 		case 0xea:
       // 			// NOP
       // 			break;
@@ -2199,10 +2220,10 @@ export function Exec6502Instruction() {
       // 			// SBC imm
       // 			SBCInstrHandler(ReadPaged(ProgramCounter++));
       // 			break;
-      // 		case 0xec:
-      // 			// CPX abs
-      // 			CPXInstrHandler(AbsAddrModeHandler_Data());
-      // 			break;
+      case 0xec:
+        // CPX abs
+        CPXInstrHandler(AbsAddrModeHandler_Data());
+        break;
       // 		case 0xed:
       // 			// SBC abs
       // 			SBCInstrHandler(AbsAddrModeHandler_Data());
@@ -2270,14 +2291,14 @@ export function Exec6502Instruction() {
       // 				SBCInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0xfd:
-      // 			// SBC abs,X
-      // 			SBCInstrHandler(AbsXAddrModeHandler_Data());
-      // 			break;
-      // 		case 0xfe:
-      // 			// INC abs,X
-      // 			INCInstrHandler(AbsXAddrModeHandler_Address());
-      // 			break;
+      case 0xfd:
+        // SBC abs,X
+        SBCInstrHandler(AbsXAddrModeHandler_Data());
+        break;
+      case 0xfe:
+        // INC abs,X
+        INCInstrHandler(AbsXAddrModeHandler_Address());
+        break;
       // 		case 0xff: {
       // 			// Undocumented instruction: ISC abs,X
       // 			int Address = AbsXAddrModeHandler_Address();
@@ -2292,10 +2313,10 @@ export function Exec6502Instruction() {
     // This block corrects the cycle count for the branch instructions
     if (
       CurrentInstruction == 0x10 ||
-      // CurrentInstruction == 0x30 ||
+      CurrentInstruction == 0x30 ||
       CurrentInstruction == 0x50 ||
-      // CurrentInstruction == 0x70 ||
-      // CurrentInstruction == 0x90 ||
+      //CurrentInstruction == 0x70 ||
+      CurrentInstruction == 0x90 ||
       CurrentInstruction == 0xb0 ||
       CurrentInstruction == 0xd0 ||
       CurrentInstruction == 0xf0
@@ -2358,6 +2379,7 @@ function PollHardware(nCycles: number) {
 
   if (TotalCycles > CycleCountWrap) {
     TotalCycles -= CycleCountWrap;
+    throw "not impl";
     //     AdjustTrigger(AtoDTrigger);
     //     AdjustTrigger(SoundTrigger);
     //     AdjustTrigger(Disc8271Trigger);
@@ -2370,10 +2392,10 @@ function PollHardware(nCycles: number) {
   // Check for anything time critical
 
   //if (!BasicHardwareOnly) {
-  //   AtoD_poll(nCycles);
-  //   SerialPoll();
+  AtoD_poll(nCycles);
+  SerialPoll();
   //   //}
-  //   Disc8271Poll();
+  Disc8271Poll();
   //   SoundPoll();
 
   //   if (DisplayCycles > 0) DisplayCycles -= nCycles; // Countdown time till end of display of info.

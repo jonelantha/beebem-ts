@@ -129,13 +129,13 @@ function UpdateIFRTopBit() {
   setIntStatus(getIntStatus() | (SysVIAState.ifr & 128) ? 1 << IRQ_sysVia : 0);
 }
 
-// void PulseSysViaCB1(void) {
-// /// Set IFR bit 4 - AtoD end of conversion interrupt
-// 	if (SysVIAState.ier & 16) {
-// 		SysVIAState.ifr|=16;
-// 		UpdateIFRTopBit();
-// 	}
-// }
+export function PulseSysViaCB1() {
+  /// Set IFR bit 4 - AtoD end of conversion interrupt
+  if (SysVIAState.ier & 16) {
+    SysVIAState.ifr |= 16;
+    UpdateIFRTopBit();
+  }
+}
 
 /*--------------------------------------------------------------------------*/
 // void BeebKeyUp(int row,int col) {
@@ -458,17 +458,17 @@ export function SysVIARead(Address: number) {
   let tmp = 0xff; // unsigned char
   //   // DebugTrace("SysVIARead: Address=0x%02x at %d\n", Address, TotalCycles);
   switch (Address) {
-    //     case 0: /* IRB read */
-    // 	  // Clear bit 4 of IFR from ATOD Conversion
-    //       SysVIAState.ifr&=~16;
-    //       tmp=SysVIAState.orb & SysVIAState.ddrb;
-    //       //!JoystickButton[1])
-    //         tmp |= 32;
-    //       //!JoystickButton[0])
-    //         tmp |= 16;
-    //       tmp |= 192; /* Speech system non existant */
-    //       UpdateIFRTopBit();
-    //       break;
+    case 0 /* IRB read */:
+      // Clear bit 4 of IFR from ATOD Conversion
+      SysVIAState.ifr &= ~16;
+      tmp = SysVIAState.orb & SysVIAState.ddrb;
+      //!JoystickButton[1])
+      tmp |= 32;
+      //!JoystickButton[0])
+      tmp |= 16;
+      tmp |= 192; /* Speech system non existant */
+      UpdateIFRTopBit();
+      break;
     //     case 2:
     //       tmp = SysVIAState.ddrb;
     //       break;

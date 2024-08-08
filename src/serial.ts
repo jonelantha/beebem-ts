@@ -50,7 +50,7 @@ const MC6850_CONTROL_RIE = 0x80;
 
 // unsigned char ACIA_Status; // 6850 ACIA Status register
 // unsigned char ACIA_Control; // 6850 ACIA Control register
-// static unsigned char SerialULAControl; // Serial ULA / SERPROC control register
+let SerialULAControl = 0; // unsigned char  Serial ULA / SERPROC control register
 
 // static bool RTS;
 // static bool FirstReset = true;
@@ -206,36 +206,38 @@ export function SerialACIAWriteControl(Value: number) {
 // The Serial ULA control register controls the cassette motor relay,
 // transmit and receive baud rates, and RS423/cassette switch
 
-// void SerialULAWrite(unsigned char Value)
-// {
-// 	if (DebugEnabled)
-// 	{
-// 		DebugDisplayTraceF(DebugType::Serial, "Serial: Write serial ULA %02X", (int)Value);
-// 	}
+/**
+ * @param Value unsigned char
+ */
+export function SerialULAWrite(Value: number) {
+  // if (DebugEnabled)
+  // {
+  // 	DebugDisplayTraceF(DebugType::Serial, "Serial: Write serial ULA %02X", (int)Value);
+  // }
 
-// 	SerialULAControl = Value;
+  SerialULAControl = Value;
 
-// 	// Slightly easier this time.
-// 	// just the Rx and Tx baud rates, and the selectors.
-// 	CassetteRelay = (Value & 0x80) != 0;
-// 	TapeAudio.Enabled = CassetteRelay;
-// 	LEDs.Motor = CassetteRelay;
+  // Slightly easier this time.
+  // just the Rx and Tx baud rates, and the selectors.
+  // CassetteRelay = (Value & 0x80) != 0;
+  // TapeAudio.Enabled = CassetteRelay;
+  // LEDs.Motor = CassetteRelay;
 
-// 	if (CassetteRelay)
-// 	{
-// 		SetTrigger(TAPECYCLES, TapeTrigger);
-// 	}
+  // if (CassetteRelay)
+  // {
+  // 	SetTrigger(TAPECYCLES, TapeTrigger);
+  // }
 
-// 	if (CassetteRelay != OldRelayState)
-// 	{
-// 		OldRelayState = CassetteRelay;
-// 		ClickRelay(CassetteRelay);
-// 	}
+  // if (CassetteRelay != OldRelayState)
+  // {
+  // 	OldRelayState = CassetteRelay;
+  // 	ClickRelay(CassetteRelay);
+  // }
 
-// 	SerialChannel = (Value & 0x40) != 0 ? SerialDevice::RS423 : SerialDevice::Cassette;
-// 	Tx_Rate = Baud_Rates[(Value & 0x07)];
-// 	Rx_Rate = Baud_Rates[(Value & 0x38) >> 3];
-// }
+  // SerialChannel = (Value & 0x40) != 0 ? SerialDevice::RS423 : SerialDevice::Cassette;
+  // Tx_Rate = Baud_Rates[(Value & 0x07)];
+  // Rx_Rate = Baud_Rates[(Value & 0x38) >> 3];
+}
 
 // unsigned char SerialULARead()
 // {
@@ -353,96 +355,83 @@ export function SerialACIAWriteControl(Value: number) {
 // 	return Data;
 // }
 
-// void SerialPoll()
-// {
-// 	if (SerialChannel == SerialDevice::Cassette)
-// 	{
-// 		if (CassetteRelay)
-// 		{
-// 			if (UEFFileOpen)
-// 			{
-// 				if (TapeClock != OldClock)
-// 				{
-// 					UEFBuf = UEFReader.GetData(TapeClock);
-// 					OldClock = TapeClock;
-// 				}
-
-// 				if (UEFBuf != OldUEFBuf ||
-// 					UEFRES_TYPE(UEFBuf) == UEF_CARRIER_TONE ||
-// 					UEFRES_TYPE(UEFBuf) == UEF_GAP)
-// 				{
-// 					OldUEFBuf = UEFBuf;
-
-// 					// New data read in, so do something about it
-// 					switch (UEFRES_TYPE(UEFBuf))
-// 					{
-// 						case UEF_CARRIER_TONE:
-// 							DCDI = true;
-// 							TapeAudio.Signal = 2;
-// 							// TapeAudio.Samples = 0;
-// 							TapeAudio.BytePos = 11;
-// 							break;
-
-// 						case UEF_GAP:
-// 							DCDI = true;
-// 							TapeAudio.Signal = 0;
-// 							break;
-
-// 						case UEF_DATA: {
-// 							DCDI = false;
-// 							unsigned char Data = UEFRES_BYTE(UEFBuf);
-// 							HandleData(Data);
-
-// 							TapeAudio.Data       = (Data << 1) | 1;
-// 							TapeAudio.BytePos    = 1;
-// 							TapeAudio.CurrentBit = 0;
-// 							TapeAudio.Signal     = 1;
-// 							TapeAudio.ByteCount  = 3;
-// 							break;
-// 						}
-// 					}
-// 				}
-
-// 				if (RxD < 2)
-// 				{
-// 					if (TotalCycles >= TapeTrigger)
-// 					{
-// 						TapeClock++;
-
-// 						SetTrigger(TAPECYCLES, TapeTrigger);
-// 					}
-// 				}
-// 			}
-
-// 			if (DCDI != ODCDI)
-// 			{
-// 				if (DCDI)
-// 				{
-// 					// Low to high transition on the DCD line
-
-// 					if (RIE)
-// 					{
-// 						ACIA_Status |= MC6850_STATUS_IRQ;
-// 						intStatus |= 1 << serial;
-// 					}
-
-// 					DCD = true;
-// 					ACIA_Status |= MC6850_STATUS_DCD; // ACIA_Status &= ~MC6850_STATUS_RDRF;
-// 					// DCDClear = 0;
-// 				}
-// 				else // !DCDI
-// 				{
-// 					DCD = false;
-// 					ACIA_Status &= ~MC6850_STATUS_DCD;
-// 					// DCDClear = 0;
-// 				}
-
-// 				ODCDI = DCDI;
-// 			}
-// 		}
-// 	}
-
-// }
+export function SerialPoll() {
+  // 	if (SerialChannel == SerialDevice::Cassette)
+  // 	{
+  // 		if (CassetteRelay)
+  // 		{
+  // 			if (UEFFileOpen)
+  // 			{
+  // 				if (TapeClock != OldClock)
+  // 				{
+  // 					UEFBuf = UEFReader.GetData(TapeClock);
+  // 					OldClock = TapeClock;
+  // 				}
+  // 				if (UEFBuf != OldUEFBuf ||
+  // 					UEFRES_TYPE(UEFBuf) == UEF_CARRIER_TONE ||
+  // 					UEFRES_TYPE(UEFBuf) == UEF_GAP)
+  // 				{
+  // 					OldUEFBuf = UEFBuf;
+  // 					// New data read in, so do something about it
+  // 					switch (UEFRES_TYPE(UEFBuf))
+  // 					{
+  // 						case UEF_CARRIER_TONE:
+  // 							DCDI = true;
+  // 							TapeAudio.Signal = 2;
+  // 							// TapeAudio.Samples = 0;
+  // 							TapeAudio.BytePos = 11;
+  // 							break;
+  // 						case UEF_GAP:
+  // 							DCDI = true;
+  // 							TapeAudio.Signal = 0;
+  // 							break;
+  // 						case UEF_DATA: {
+  // 							DCDI = false;
+  // 							unsigned char Data = UEFRES_BYTE(UEFBuf);
+  // 							HandleData(Data);
+  // 							TapeAudio.Data       = (Data << 1) | 1;
+  // 							TapeAudio.BytePos    = 1;
+  // 							TapeAudio.CurrentBit = 0;
+  // 							TapeAudio.Signal     = 1;
+  // 							TapeAudio.ByteCount  = 3;
+  // 							break;
+  // 						}
+  // 					}
+  // 				}
+  // 				if (RxD < 2)
+  // 				{
+  // 					if (TotalCycles >= TapeTrigger)
+  // 					{
+  // 						TapeClock++;
+  // 						SetTrigger(TAPECYCLES, TapeTrigger);
+  // 					}
+  // 				}
+  // 			}
+  // 			if (DCDI != ODCDI)
+  // 			{
+  // 				if (DCDI)
+  // 				{
+  // 					// Low to high transition on the DCD line
+  // 					if (RIE)
+  // 					{
+  // 						ACIA_Status |= MC6850_STATUS_IRQ;
+  // 						intStatus |= 1 << serial;
+  // 					}
+  // 					DCD = true;
+  // 					ACIA_Status |= MC6850_STATUS_DCD; // ACIA_Status &= ~MC6850_STATUS_RDRF;
+  // 					// DCDClear = 0;
+  // 				}
+  // 				else // !DCDI
+  // 				{
+  // 					DCD = false;
+  // 					ACIA_Status &= ~MC6850_STATUS_DCD;
+  // 					// DCDClear = 0;
+  // 				}
+  // 				ODCDI = DCDI;
+  // 			}
+  // 		}
+  // 	}
+}
 
 // static void CloseUEFFile()
 // {

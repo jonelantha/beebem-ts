@@ -210,98 +210,114 @@ export function UserVIAWrite(Address: number, Value: number) {
 
 // Address is in the range 0-f - with the fe60 stripped out
 
-// unsigned char UserVIARead(int Address)
-// {
-// 	unsigned char tmp = 0xff;
+/**
+ * @param Address int
+ */
+export function UserVIARead(Address: number) {
+  let tmp = 0xff; // unsigned char
 
-// 	// DebugTrace("UserVIARead: Address=0x%02x at %d\n", Address, TotalCycles);
+  // DebugTrace("UserVIARead: Address=0x%02x at %d\n", Address, TotalCycles);
 
-// 	switch (Address)
-// 	{
-// 		case 0: /* IRB read */
-// 			tmp = (UserVIAState.orb & UserVIAState.ddrb) | (UserVIAState.irb & ~UserVIAState.ddrb);
-// 			break;
+  switch (Address) {
+    case 0 /* IRB read */:
+      throw "not impl";
+      tmp =
+        (UserVIAState.orb & UserVIAState.ddrb) |
+        (UserVIAState.irb & ~UserVIAState.ddrb);
+      break;
 
-// 		case 2:
-// 			tmp = UserVIAState.ddrb;
-// 			break;
+    case 2:
+      throw "not impl";
+      tmp = UserVIAState.ddrb;
+      break;
 
-// 		case 3:
-// 			tmp = UserVIAState.ddra;
-// 			break;
+    case 3:
+      throw "not impl";
+      tmp = UserVIAState.ddra;
+      break;
 
-// 		case 4: /* Timer 1 lo counter */
-// 			if (UserVIAState.timer1c < 0)
-// 				tmp = 0xff;
-// 			else
-// 				tmp = (UserVIAState.timer1c / 2) & 0xff;
-// 			UserVIAState.ifr &= 0xbf; /* Clear bit 6 - timer 1 */
-// 			UpdateIFRTopBit();
-// 			break;
+    case 4 /* Timer 1 lo counter */:
+      throw "not impl";
+      if (UserVIAState.timer1c < 0) tmp = 0xff;
+      else tmp = (UserVIAState.timer1c / 2) & 0xff;
+      UserVIAState.ifr &= 0xbf; /* Clear bit 6 - timer 1 */
+      UpdateIFRTopBit();
+      break;
 
-// 		case 5: /* Timer 1 hi counter */
-// 			tmp = (UserVIAState.timer1c >> 9) & 0xff;
-// 			break;
+    case 5 /* Timer 1 hi counter */:
+      throw "not impl";
+      tmp = (UserVIAState.timer1c >> 9) & 0xff;
+      break;
 
-// 		case 6: /* Timer 1 lo latch */
-// 			tmp = UserVIAState.timer1l & 0xff;
-// 			break;
+    case 6 /* Timer 1 lo latch */:
+      throw "not impl";
+      tmp = UserVIAState.timer1l & 0xff;
+      break;
 
-// 		case 7: /* Timer 1 hi latch */
-// 			tmp = (UserVIAState.timer1l >> 8) & 0xff;
-// 			break;
+    case 7 /* Timer 1 hi latch */:
+      throw "not impl";
+      tmp = (UserVIAState.timer1l >> 8) & 0xff;
+      break;
 
-// 		case 8: /* Timer 2 lo counter */
-// 			if (UserVIAState.timer2c < 0) /* Adjust for dividing -ve count by 2 */
-// 				tmp = ((UserVIAState.timer2c - 1) / 2) & 0xff;
-// 			else
-// 				tmp = (UserVIAState.timer2c / 2) & 0xff;
-// 			UserVIAState.ifr &= 0xdf; /* Clear bit 5 - timer 2 */
-// 			UpdateIFRTopBit();
-// 			break;
+    case 8 /* Timer 2 lo counter */:
+      throw "not impl";
+      if (UserVIAState.timer2c < 0)
+        /* Adjust for dividing -ve count by 2 */
+        tmp = ((UserVIAState.timer2c - 1) / 2) & 0xff;
+      else tmp = (UserVIAState.timer2c / 2) & 0xff;
+      UserVIAState.ifr &= 0xdf; /* Clear bit 5 - timer 2 */
+      UpdateIFRTopBit();
+      break;
 
-// 		case 9: /* Timer 2 hi counter */
-// 			tmp = (UserVIAState.timer2c >> 9) & 0xff;
-// 			break;
+    case 9 /* Timer 2 hi counter */:
+      throw "not impl";
+      tmp = (UserVIAState.timer2c >> 9) & 0xff;
+      break;
 
-// 		case 10:
-// 			tmp = UserVIAState.sr;
-// 			UpdateSRState(true);
-// 			break;
+    case 10:
+      throw "not impl";
+      tmp = UserVIAState.sr;
+      UpdateSRState(true);
+      break;
 
-// 		case 11:
-// 			tmp = UserVIAState.acr;
-// 			break;
+    case 11:
+      throw "not impl";
+      tmp = UserVIAState.acr;
+      break;
 
-// 		case 12:
-// 			tmp = UserVIAState.pcr;
-// 			break;
+    case 12:
+      tmp = UserVIAState.pcr;
+      break;
 
-// 		case 13:
-// 			UpdateIFRTopBit();
-// 			tmp = UserVIAState.ifr;
-// 			break;
+    case 13:
+      throw "not impl";
+      UpdateIFRTopBit();
+      tmp = UserVIAState.ifr;
+      break;
 
-// 		case 14:
-// 			tmp = UserVIAState.ier | 0x80;
-// 			break;
+    case 14:
+      throw "not impl";
+      tmp = UserVIAState.ier | 0x80;
+      break;
 
-// 		case 1:
-// 			UserVIAState.ifr &= 0xfc;
-// 			UpdateIFRTopBit();
-// 		case 15:
-// 			tmp = 255;
-// 			break;
-// 	}
+    case 1:
+      throw "not impl";
+      UserVIAState.ifr &= 0xfc;
+      UpdateIFRTopBit();
+    case 15:
+      throw "not impl";
+      tmp = 255;
+      break;
+  }
 
-// 	if (DebugEnabled)
-// 	{
-// 	  DebugDisplayTraceF(DebugType::UserVIA, "UserVia: Read address %X value %02X",
-// 	                     Address & 0xf, tmp & 0xff);
-// 	}
+  // if (DebugEnabled)
+  // {
+  //   DebugDisplayTraceF(DebugType::UserVIA, "UserVia: Read address %X value %02X",
+  //                      Address & 0xf, tmp & 0xff);
+  // }
 
-// 	return tmp;
-// }
+  return tmp;
+}
 
 /*--------------------------------------------------------------------------*/
 // void UserVIATriggerCA1Int()

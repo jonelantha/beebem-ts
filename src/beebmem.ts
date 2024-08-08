@@ -27,10 +27,12 @@ Boston, MA  02110-1301, USA.
 // IDE Interface: JGH jgh@mdfs.net 25/12/2011
 
 import { AdjustForIORead, AdjustForIOWrite, SyncIO } from "./6502core";
-import { SerialACIAWriteControl } from "./serial";
+import { AtoDWrite } from "./atodconv";
+import { Disc8271Read } from "./disc8271";
+import { SerialACIAWriteControl, SerialULAWrite } from "./serial";
 import { getIC32State, SysVIARead, SysVIAWrite } from "./sysvia";
-import { UserVIAWrite } from "./uservia";
-import { VideoULARead, VideoULAWrite } from "./video";
+import { UserVIARead, UserVIAWrite } from "./uservia";
+import { CRTCWrite, VideoULARead, VideoULAWrite } from "./video";
 
 export function BEEBREADMEM_DIRECT(Address: number) {
   return WholeRam[Address];
@@ -178,11 +180,10 @@ export function BeebReadMem(Address: number) {
   }
 
   if ((Address & ~0xf) == 0xfe60 || (Address & ~0xf) == 0xfe70) {
-    throw "not impl";
-    // SyncIO();
-    // Value = UserVIARead(Address & 0xf);
-    // AdjustForIORead();
-    // return Value;
+    SyncIO();
+    Value = UserVIARead(Address & 0xf);
+    AdjustForIORead();
+    return Value;
   }
 
   if ((Address & ~7) == 0xfe00) {
@@ -227,13 +228,11 @@ export function BeebReadMem(Address: number) {
   }
 
   if ((Address & ~0x1f) == 0xfe80) {
-    throw "not impl";
-    //return Disc8271Read(Address & 0x7);
+    return Disc8271Read(Address & 0x7);
   }
 
   if ((Address & ~0x1f) == 0xfea0) {
-    throw "not impl";
-    //return(0xfe); // if not enabled
+    return 0xfe; // if not enabled
   }
 
   if ((Address & ~0x1f) == 0xfec0) {
@@ -315,11 +314,10 @@ export function BeebWriteMem(Address: number, Value: number) {
   }
 
   if ((Address & ~0x7) == 0xfe00) {
-    throw "not impl";
-    // SyncIO();
-    // AdjustForIOWrite();
-    // CRTCWrite(Address & 0x7, Value);
-    // return;
+    SyncIO();
+    AdjustForIOWrite();
+    CRTCWrite(Address & 0x7, Value);
+    return;
   }
 
   if (Address == 0xfe08) {
@@ -338,11 +336,10 @@ export function BeebWriteMem(Address: number, Value: number) {
   }
 
   if (Address == 0xfe10) {
-    throw "not impl";
-    // SyncIO();
-    // AdjustForIOWrite();
-    // SerialULAWrite(Value);
-    // return;
+    SyncIO();
+    AdjustForIOWrite();
+    SerialULAWrite(Value);
+    return;
   }
 
   if ((Address & ~0x3) == 0xfe20) {
@@ -362,11 +359,10 @@ export function BeebWriteMem(Address: number, Value: number) {
   }
 
   if ((Address & ~0x1f) == 0xfec0) {
-    throw "not impl";
-    // SyncIO();
-    // AdjustForIOWrite();
-    // AtoDWrite(Address & 0xf, Value);
-    // return;
+    SyncIO();
+    AdjustForIOWrite();
+    AtoDWrite(Address & 0xf, Value);
+    return;
   }
 
   /*if ((Address & ~0xf) == 0xfee0)
