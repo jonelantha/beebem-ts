@@ -28,7 +28,7 @@ Boston, MA  02110-1301, USA.
 
 import { AdjustForIORead, AdjustForIOWrite, SyncIO } from "./6502core";
 import { AtoDWrite } from "./atodconv";
-import { Disc8271Read } from "./disc8271";
+import { Disc8271Read, Disc8271Write } from "./disc8271";
 import { SerialACIAWriteControl, SerialULAWrite } from "./serial";
 import { getIC32State, SysVIARead, SysVIAWrite } from "./sysvia";
 import { UserVIARead, UserVIAWrite } from "./uservia";
@@ -353,9 +353,8 @@ export function BeebWriteMem(Address: number, Value: number) {
   }
 
   if ((Address & ~0x1f) == 0xfe80) {
-    throw "not impl";
-    // Disc8271Write(Address & 7, Value);
-    // return;
+    Disc8271Write(Address & 7, Value);
+    return;
   }
 
   if ((Address & ~0x1f) == 0xfec0) {

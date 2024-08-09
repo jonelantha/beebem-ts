@@ -697,15 +697,17 @@ function ROLInstrHandler(address: number) {
   );
 }
 
-// INLINE static void ROLInstrHandler_Acc(void) {
-//   unsigned char oldVal,newVal;
-
-//   oldVal=Accumulator;
-//   newVal=((unsigned int)oldVal<<1) & 254;
-//   newVal+=GETCFLAG;
-//   Accumulator=newVal;
-//   SetPSRCZN((oldVal & 128)>0,newVal==0,newVal & 128);
-// } /* ROLInstrHandler_Acc */
+function ROLInstrHandler_Acc() {
+  const oldVal = Accumulator;
+  let newVal = /*(unsigned int)*/ (oldVal << 1) & 254;
+  newVal += GETCFLAG() ? 1 : 0;
+  Accumulator = newVal;
+  SetPSRCZN(
+    (oldVal & 128) > 0 ? 1 : 0,
+    newVal == 0 ? 1 : 0,
+    newVal & 128 ? 128 : 0,
+  );
+} /* ROLInstrHandler_Acc */
 
 /**
  * @param address int
@@ -1319,10 +1321,10 @@ export function Exec6502Instruction() {
         // AND imm
         ANDInstrHandler(ReadPaged(ProgramCounter++));
         break;
-      // 		case 0x2a:
-      // 			// ROL A
-      // 			ROLInstrHandler_Acc();
-      // 			break;
+      case 0x2a:
+        // ROL A
+        ROLInstrHandler_Acc();
+        break;
       case 0x2c:
         // BIT abs
         BITInstrHandler(AbsAddrModeHandler_Data());
@@ -1346,10 +1348,10 @@ export function Exec6502Instruction() {
         // BMI rel
         BMIInstrHandler();
         break;
-      // 		case 0x31:
-      // 			// AND (zp),Y
-      // 			ANDInstrHandler(IndYAddrModeHandler_Data());
-      // 			break;
+      case 0x31:
+        // AND (zp),Y
+        ANDInstrHandler(IndYAddrModeHandler_Data());
+        break;
       // 		case 0x32:
       // 			// Undocumented instruction: KIL
       // 			KILInstrHandler();
@@ -1438,10 +1440,10 @@ export function Exec6502Instruction() {
       // 			// NOP zp
       // 			ReadPaged(ZeroPgAddrModeHandler_Address());
       // 			break;
-      // 		case 0x45:
-      // 			// EOR zp
-      // 			EORInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
-      // 			break;
+      case 0x45:
+        // EOR zp
+        EORInstrHandler(BEEBREADMEM_DIRECT(ReadPaged(ProgramCounter++)));
+        break;
       case 0x46:
         // LSR zp
         LSRInstrHandler(ZeroPgAddrModeHandler_Address());
@@ -1590,10 +1592,10 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: NOP zp
       // 			ZeroPgAddrModeHandler_Address();
       // 			break;
-      // 		case 0x65:
-      // 			// ADC zp
-      // 			ADCInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
-      // 			break;
+      case 0x65:
+        // ADC zp
+        ADCInstrHandler(BEEBREADMEM_DIRECT(ReadPaged(ProgramCounter++)));
+        break;
       case 0x66:
         // ROR zp
         RORInstrHandler(ZeroPgAddrModeHandler_Address());
@@ -1988,10 +1990,10 @@ export function Exec6502Instruction() {
       // 			LDXInstrHandler(ZeroPgYAddrModeHandler_Data());
       // 			Accumulator = XReg;
       // 			break;
-      // 		case 0xb8:
-      // 			// CLV
-      // 			PSR &= 255 - FlagV;
-      // 			break;
+      case 0xb8:
+        // CLV
+        PSR &= 255 - FlagV;
+        break;
       case 0xb9:
         // LDA abs,Y
         LDAInstrHandler(AbsYAddrModeHandler_Data());

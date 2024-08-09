@@ -38,10 +38,10 @@ export const Disc8271Poll = () =>
 // #define ENABLE_LOG 0
 
 // 8271 Status register
-// const unsigned char STATUS_REG_COMMAND_BUSY       = 0x80;
-// const unsigned char STATUS_REG_COMMAND_FULL       = 0x40;
+const STATUS_REG_COMMAND_BUSY = 0x80;
+// const STATUS_REG_COMMAND_FULL = 0x40;
 // const unsigned char STATUS_REG_PARAMETER_FULL     = 0x20;
-// const unsigned char STATUS_REG_RESULT_FULL        = 0x10;
+const STATUS_REG_RESULT_FULL = 0x10;
 const STATUS_REG_INTERRUPT_REQUEST = 0x08;
 // const unsigned char STATUS_REG_NON_DMA_MODE       = 0x04;
 
@@ -63,18 +63,18 @@ const STATUS_REG_INTERRUPT_REQUEST = 0x08;
 // const unsigned char RESULT_REG_DELETED_DATA_FOUND = 0x20;
 
 // 8271 special registers
-// const unsigned char SPECIAL_REG_SCAN_SECTOR_NUMBER        = 0x06;
-// const unsigned char SPECIAL_REG_SCAN_COUNT_MSB            = 0x14;
-// const unsigned char SPECIAL_REG_SCAN_COUNT_LSB            = 0x13;
-// const unsigned char SPECIAL_REG_SURFACE_0_CURRENT_TRACK   = 0x12;
-// const unsigned char SPECIAL_REG_SURFACE_1_CURRENT_TRACK   = 0x1A;
-// const unsigned char SPECIAL_REG_MODE_REGISTER             = 0x17;
-// const unsigned char SPECIAL_REG_DRIVE_CONTROL_OUTPUT_PORT = 0x23;
-// const unsigned char SPECIAL_REG_DRIVE_CONTROL_INPUT_PORT  = 0x22;
-// const unsigned char SPECIAL_REG_SURFACE_0_BAD_TRACK_1     = 0x10;
-// const unsigned char SPECIAL_REG_SURFACE_0_BAD_TRACK_2     = 0x11;
-// const unsigned char SPECIAL_REG_SURFACE_1_BAD_TRACK_1     = 0x18;
-// const unsigned char SPECIAL_REG_SURFACE_1_BAD_TRACK_2     = 0x19;
+const SPECIAL_REG_SCAN_SECTOR_NUMBER = 0x06;
+const SPECIAL_REG_SCAN_COUNT_MSB = 0x14;
+const SPECIAL_REG_SCAN_COUNT_LSB = 0x13;
+const SPECIAL_REG_SURFACE_0_CURRENT_TRACK = 0x12;
+const SPECIAL_REG_SURFACE_1_CURRENT_TRACK = 0x1a;
+const SPECIAL_REG_MODE_REGISTER = 0x17;
+const SPECIAL_REG_DRIVE_CONTROL_OUTPUT_PORT = 0x23;
+const SPECIAL_REG_DRIVE_CONTROL_INPUT_PORT = 0x22;
+const SPECIAL_REG_SURFACE_0_BAD_TRACK_1 = 0x10;
+const SPECIAL_REG_SURFACE_0_BAD_TRACK_2 = 0x11;
+const SPECIAL_REG_SURFACE_1_BAD_TRACK_1 = 0x18;
+const SPECIAL_REG_SURFACE_1_BAD_TRACK_2 = 0x19;
 
 let Disc8271Trigger = 0; /* int Cycle based time Disc8271Trigger */
 // static unsigned char ResultReg;
@@ -82,31 +82,33 @@ let StatusReg = 0; // unsigned char
 // static unsigned char DataReg;
 // static unsigned char Internal_Scan_SectorNum;
 // static unsigned int Internal_Scan_Count; /* Read as two bytes */
-// static unsigned char Internal_ModeReg;
-// static unsigned char Internal_CurrentTrack[2]; /* 0/1 for surface number */
-// static unsigned char Internal_DriveControlOutputPort;
-// static unsigned char Internal_DriveControlInputPort;
-// static unsigned char Internal_BadTracks[2][2]; /* 1st subscript is surface 0/1 and second subscript is badtrack 0/1 */
+let Internal_ModeReg = 0;
+const Internal_CurrentTrack = [0, 0]; /* unsigned char 0/1 for surface number */
+let Internal_DriveControlOutputPort = 0; // unsigned char
+let Internal_DriveControlInputPort = 0; // unsigned char
+const Internal_BadTracks = Array.from({ length: 2 }, () => [0, 0]);
+/* 1st subscript is surface 0/1 and second subscript is badtrack 0/1 */
 
 // State set by the Specify (initialisation) command
 // See Intel 8271 data sheet, page 15, ADUG page 39-40
-// static int StepRate; // In 2ms steps
-// static int HeadSettlingTime; // In 2ms steps
-// static int IndexCountBeforeHeadUnload; // Number of revolutions (0 to 14), or 15 to keep loaded
-// static int HeadLoadTime; // In 8ms steps
+let StepRate = 0; // int In 2ms steps
+let HeadSettlingTime = 0; // int In 2ms steps
+let IndexCountBeforeHeadUnload = 0; // int Number of revolutions (0 to 14), or 15 to keep loaded
+let HeadLoadTime = 0; // int In 8ms steps
 
 // static int DriveHeadPosition[2]={0};
 // static bool DriveHeadLoaded=false;
 // static bool DriveHeadUnloadPending=false;
 
-// static int ThisCommand;
-// static int NParamsInThisCommand;
-// static int PresentParam; /* From 0 */
-// static unsigned char Params[16]; /* Wildly more than we need */
+let ThisCommand: number; // int
+let NParamsInThisCommand: number; // int
+let PresentParam: number; /* int From 0 */
+const Params = Array.from({ length: 16 }, () => 0);
+/* Wildly more than we need */
 
 // These bools indicate which drives the last command selected.
 // They also act as "drive ready" bits which are reset when the motor stops.
-// static bool Selects[2]; /* Drive selects */
+const Selects = [false, false]; /* Drive selects */
 // static bool Writeable[2]={false,false}; /* True if the drives are writeable */
 
 // static bool FirstWriteInt; // Indicates the start of a write operation
@@ -155,13 +157,13 @@ let StatusReg = 0; // unsigned char
 
 // typedef void (*CommandFunc)(void);
 
-// #define UPDATENMISTATUS                           \
-//   if (StatusReg & STATUS_REG_INTERRUPT_REQUEST) { \
-//     NMIStatus |= 1 << nmi_floppy;                 \
-//   }                                               \
-//   else {                                          \
-//     NMIStatus &= ~(1 << nmi_floppy);              \
-//   }
+function UPDATENMISTATUS() {
+  if (StatusReg & STATUS_REG_INTERRUPT_REQUEST) {
+    //NMIStatus |= 1 << nmi_floppy;
+  } else {
+    //NMIStatus &= ~(1 << nmi_floppy);
+  }
+}
 
 /*--------------------------------------------------------------------------*/
 
@@ -181,25 +183,27 @@ let StatusReg = 0; // unsigned char
 
 /*--------------------------------------------------------------------------*/
 
-// struct PrimaryCommandLookupType {
-//   unsigned char CommandNum;
-//   unsigned char Mask; /* Mask command with this before comparing with CommandNum - allows drive ID to be removed */
-//   int NParams; /* Number of parameters to follow */
-//   CommandFunc ToCall; /* Called after all paameters have arrived */
-//   CommandFunc IntHandler; /* Called when interrupt requested by command is about to happen */
-//   const char *Ident; /* Mainly for debugging */
-// };
+type PrimaryCommandLookupType = {
+  CommandNum: number; // unsigned char
+  Mask: number /* unsigned char Mask command with this before comparing with CommandNum - allows drive ID to be removed */;
+  NParams: number /* int Number of parameters to follow */;
+  ToCall: () => void /* Called after all paameters have arrived */;
+  IntHandler:
+    | (() => void)
+    | undefined /* Called when interrupt requested by command is about to happen */;
+  Ident: string /* Mainly for debugging */;
+};
 
 /*--------------------------------------------------------------------------*/
 /* For appropriate commands checks the select bits in the command code and  */
 /* selects the appropriate drive.                                           */
-// static void DoSelects(void) {
-//   Selects[0]=(ThisCommand & 0x40)!=0;
-//   Selects[1]=(ThisCommand & 0x80)!=0;
-//   Internal_DriveControlOutputPort&=0x3f;
-//   if (Selects[0]) Internal_DriveControlOutputPort|=0x40;
-//   if (Selects[1]) Internal_DriveControlOutputPort|=0x80;
-// }
+function DoSelects() {
+  Selects[0] = (ThisCommand & 0x40) != 0;
+  Selects[1] = (ThisCommand & 0x80) != 0;
+  Internal_DriveControlOutputPort &= 0x3f;
+  if (Selects[0]) Internal_DriveControlOutputPort |= 0x40;
+  if (Selects[1]) Internal_DriveControlOutputPort |= 0x80;
+}
 
 /*--------------------------------------------------------------------------*/
 // static void NotImp(const char *NotImpCom) {
@@ -843,93 +847,103 @@ let StatusReg = 0; // unsigned char
 
 // See Intel 8271 data sheet, page 15, ADUG page 39-40
 
-// static void DoSpecifyCommand(void) {
-//   switch (Params[0]) {
-//     case 0x0D: // Initialisation
-//       StepRate = Params[1];
-//       HeadSettlingTime = Params[2];
-//       IndexCountBeforeHeadUnload = (Params[3] & 0xf0) >> 4;
-//       HeadLoadTime = Params[3] & 0x0f;
-//       break;
-
-//     case 0x10: // Load bad tracks, surface 0
-//       Internal_BadTracks[0][0] = Params[1];
-//       Internal_BadTracks[0][1] = Params[2];
-//       Internal_CurrentTrack[0] = Params[3];
-//       break;
-
-//     case 0x18: // Load bad tracks, surface 1
-//       Internal_BadTracks[1][0] = Params[1];
-//       Internal_BadTracks[1][1] = Params[2];
-//       Internal_CurrentTrack[1] = Params[3];
-//       break;
-//   }
-// }
+function DoSpecifyCommand() {
+  switch (Params[0]) {
+    case 0x0d: // Initialisation
+      StepRate = Params[1];
+      HeadSettlingTime = Params[2];
+      IndexCountBeforeHeadUnload = (Params[3] & 0xf0) >> 4;
+      HeadLoadTime = Params[3] & 0x0f;
+      break;
+    case 0x10: // Load bad tracks, surface 0
+      Internal_BadTracks[0][0] = Params[1];
+      Internal_BadTracks[0][1] = Params[2];
+      Internal_CurrentTrack[0] = Params[3];
+      break;
+    case 0x18: // Load bad tracks, surface 1
+      Internal_BadTracks[1][0] = Params[1];
+      Internal_BadTracks[1][1] = Params[2];
+      Internal_CurrentTrack[1] = Params[3];
+      break;
+  }
+}
 
 /*--------------------------------------------------------------------------*/
-// static void DoWriteSpecialCommand(void) {
-//   DoSelects();
+function DoWriteSpecialCommand() {
+  DoSelects();
 
-//   switch (Params[0]) {
-//     case SPECIAL_REG_SCAN_SECTOR_NUMBER:
-//       Internal_Scan_SectorNum = Params[1];
-//       break;
+  switch (Params[0]) {
+    case SPECIAL_REG_SCAN_SECTOR_NUMBER:
+      throw "not impl";
+      //Internal_Scan_SectorNum = Params[1];
+      break;
 
-//     case SPECIAL_REG_SCAN_COUNT_MSB:
-//       Internal_Scan_Count &= 0xff;
-//       Internal_Scan_Count |= Params[1] << 8;
-//       break;
+    case SPECIAL_REG_SCAN_COUNT_MSB:
+      throw "not impl";
+      // Internal_Scan_Count &= 0xff;
+      // Internal_Scan_Count |= Params[1] << 8;
+      break;
 
-//     case SPECIAL_REG_SCAN_COUNT_LSB:
-//       Internal_Scan_Count &= 0xff00;
-//       Internal_Scan_Count |= Params[1];
-//       break;
+    case SPECIAL_REG_SCAN_COUNT_LSB:
+      throw "not impl";
+      // Internal_Scan_Count &= 0xff00;
+      // Internal_Scan_Count |= Params[1];
+      break;
 
-//     case SPECIAL_REG_SURFACE_0_CURRENT_TRACK:
-//       Internal_CurrentTrack[0] = Params[1];
-//       break;
+    case SPECIAL_REG_SURFACE_0_CURRENT_TRACK:
+      throw "not impl";
+      //Internal_CurrentTrack[0] = Params[1];
+      break;
 
-//     case SPECIAL_REG_SURFACE_1_CURRENT_TRACK:
-//       Internal_CurrentTrack[1] = Params[1];
-//       break;
+    case SPECIAL_REG_SURFACE_1_CURRENT_TRACK:
+      throw "not impl";
+      //Internal_CurrentTrack[1] = Params[1];
+      break;
 
-//     case SPECIAL_REG_MODE_REGISTER:
-//       Internal_ModeReg = Params[1];
-//       break;
+    case SPECIAL_REG_MODE_REGISTER:
+      Internal_ModeReg = Params[1];
+      break;
 
-//     case SPECIAL_REG_DRIVE_CONTROL_OUTPUT_PORT:
-//       Internal_DriveControlOutputPort = Params[1];
-//       Selects[0] = (Params[1] & 0x40) != 0;
-//       Selects[1] = (Params[1] & 0x80) != 0;
-//       break;
+    case SPECIAL_REG_DRIVE_CONTROL_OUTPUT_PORT:
+      throw "not impl";
+      // Internal_DriveControlOutputPort = Params[1];
+      // Selects[0] = (Params[1] & 0x40) != 0;
+      // Selects[1] = (Params[1] & 0x80) != 0;
+      break;
 
-//     case SPECIAL_REG_DRIVE_CONTROL_INPUT_PORT:
-//       Internal_DriveControlInputPort = Params[1];
-//       break;
+    case SPECIAL_REG_DRIVE_CONTROL_INPUT_PORT:
+      throw "not impl";
+      //Internal_DriveControlInputPort = Params[1];
+      break;
 
-//     case SPECIAL_REG_SURFACE_0_BAD_TRACK_1:
-//       Internal_BadTracks[0][0] = Params[1];
-//       break;
+    case SPECIAL_REG_SURFACE_0_BAD_TRACK_1:
+      throw "not impl";
+      //Internal_BadTracks[0][0] = Params[1];
+      break;
 
-//     case SPECIAL_REG_SURFACE_0_BAD_TRACK_2:
-//       Internal_BadTracks[0][1] = Params[1];
-//       break;
+    case SPECIAL_REG_SURFACE_0_BAD_TRACK_2:
+      throw "not impl";
+      //Internal_BadTracks[0][1] = Params[1];
+      break;
 
-//     case SPECIAL_REG_SURFACE_1_BAD_TRACK_1:
-//       Internal_BadTracks[1][0] = Params[1];
-//       break;
+    case SPECIAL_REG_SURFACE_1_BAD_TRACK_1:
+      throw "not impl";
+      //Internal_BadTracks[1][0] = Params[1];
+      break;
 
-//     case SPECIAL_REG_SURFACE_1_BAD_TRACK_2:
-//       Internal_BadTracks[1][1] = Params[1];
-//       break;
+    case SPECIAL_REG_SURFACE_1_BAD_TRACK_2:
+      throw "not impl";
+      //Internal_BadTracks[1][1] = Params[1];
+      break;
 
-//     default:
-//       #if ENABLE_LOG
-//       WriteLog("Write to bad special register\n");
-//       #endif
-//       break;
-//   }
-// }
+    default:
+      throw "not impl";
+      // #if ENABLE_LOG
+      // WriteLog("Write to bad special register\n");
+      // #endif
+      break;
+  }
+}
 
 /*--------------------------------------------------------------------------*/
 // static void DoReadSpecialCommand(void) {
@@ -1003,40 +1017,55 @@ let StatusReg = 0; // unsigned char
 /* The following table is used to parse commands from the command number written into
 the command register - it can't distinguish between subcommands selected from the
 first parameter */
-// static const PrimaryCommandLookupType PrimaryCommandLookup[]={
-//   {0x00, 0x3f, 3, DoVarLength_ScanDataCommand, NULL,  "Scan Data (Variable Length/Multi-Record)"},
-//   {0x04, 0x3f, 3, DoVarLength_ScanDataAndDeldCommand, NULL,  "Scan Data & deleted data (Variable Length/Multi-Record)"},
-//   {0x0a, 0x3f, 2, Do128ByteSR_WriteDataCommand, NULL, "Write Data (128 byte/single record)"},
-//   {0x0b, 0x3f, 3, DoVarLength_WriteDataCommand, WriteInterrupt, "Write Data (Variable Length/Multi-Record)"},
-//   {0x0e, 0x3f, 2, Do128ByteSR_WriteDeletedDataCommand, NULL, "Write Deleted Data (128 byte/single record)"},
-//   {0x0f, 0x3f, 3, DoVarLength_WriteDeletedDataCommand, NULL, "Write Deleted Data (Variable Length/Multi-Record)"},
-//   {0x12, 0x3f, 2, Do128ByteSR_ReadDataCommand, NULL, "Read Data (128 byte/single record)"},
-//   {0x13, 0x3f, 3, DoVarLength_ReadDataCommand, ReadInterrupt, "Read Data (Variable Length/Multi-Record)"},
-//   {0x16, 0x3f, 2, Do128ByteSR_ReadDataAndDeldCommand, NULL, "Read Data & deleted data (128 byte/single record)"},
-//   {0x17, 0x3f, 3, DoVarLength_ReadDataAndDeldCommand, ReadInterrupt, "Read Data & deleted data (Variable Length/Multi-Record)"},
-//   {0x1b, 0x3f, 3, DoReadIDCommand, ReadIDInterrupt, "ReadID" },
-//   {0x1e, 0x3f, 2, Do128ByteSR_VerifyDataAndDeldCommand, NULL, "Verify Data and Deleted Data (128 byte/single record)"},
-//   {0x1f, 0x3f, 3, DoVarLength_VerifyDataAndDeldCommand, VerifyInterrupt, "Verify Data and Deleted Data (Variable Length/Multi-Record)"},
-//   {0x23, 0x3f, 5, DoFormatCommand, FormatInterrupt, "Format"},
-//   {0x29, 0x3f, 1, DoSeekCommand, SeekInterrupt, "Seek"},
-//   {0x2c, 0x3f, 0, DoReadDriveStatusCommand, NULL, "Read drive status"},
-//   {0x35, 0xff, 4, DoSpecifyCommand, NULL, "Specify" },
-//   {0x3a, 0x3f, 2, DoWriteSpecialCommand, NULL, "Write special registers" },
-//   {0x3d, 0x3f, 1, DoReadSpecialCommand, NULL, "Read special registers" },
-//   {0,    0,    0, DoBadCommand, NULL, "Unknown command"} /* Terminator due to 0 mask matching all */
-// };
+const PrimaryCommandLookup: PrimaryCommandLookupType[] = [
+  // {0x00, 0x3f, 3, DoVarLength_ScanDataCommand, NULL,  "Scan Data (Variable Length/Multi-Record)"},
+  // {0x04, 0x3f, 3, DoVarLength_ScanDataAndDeldCommand, NULL,  "Scan Data & deleted data (Variable Length/Multi-Record)"},
+  // {0x0a, 0x3f, 2, Do128ByteSR_WriteDataCommand, NULL, "Write Data (128 byte/single record)"},
+  // {0x0b, 0x3f, 3, DoVarLength_WriteDataCommand, WriteInterrupt, "Write Data (Variable Length/Multi-Record)"},
+  // {0x0e, 0x3f, 2, Do128ByteSR_WriteDeletedDataCommand, NULL, "Write Deleted Data (128 byte/single record)"},
+  // {0x0f, 0x3f, 3, DoVarLength_WriteDeletedDataCommand, NULL, "Write Deleted Data (Variable Length/Multi-Record)"},
+  // {0x12, 0x3f, 2, Do128ByteSR_ReadDataCommand, NULL, "Read Data (128 byte/single record)"},
+  // {0x13, 0x3f, 3, DoVarLength_ReadDataCommand, ReadInterrupt, "Read Data (Variable Length/Multi-Record)"},
+  // {0x16, 0x3f, 2, Do128ByteSR_ReadDataAndDeldCommand, NULL, "Read Data & deleted data (128 byte/single record)"},
+  // {0x17, 0x3f, 3, DoVarLength_ReadDataAndDeldCommand, ReadInterrupt, "Read Data & deleted data (Variable Length/Multi-Record)"},
+  // {0x1b, 0x3f, 3, DoReadIDCommand, ReadIDInterrupt, "ReadID" },
+  // {0x1e, 0x3f, 2, Do128ByteSR_VerifyDataAndDeldCommand, NULL, "Verify Data and Deleted Data (128 byte/single record)"},
+  // {0x1f, 0x3f, 3, DoVarLength_VerifyDataAndDeldCommand, VerifyInterrupt, "Verify Data and Deleted Data (Variable Length/Multi-Record)"},
+  // {0x23, 0x3f, 5, DoFormatCommand, FormatInterrupt, "Format"},
+  // {0x29, 0x3f, 1, DoSeekCommand, SeekInterrupt, "Seek"},
+  // {0x2c, 0x3f, 0, DoReadDriveStatusCommand, NULL, "Read drive status"},
+  {
+    CommandNum: 0x35,
+    Mask: 0xff,
+    NParams: 4,
+    ToCall: DoSpecifyCommand,
+    IntHandler: undefined,
+    Ident: "Specify",
+  },
+  {
+    CommandNum: 0x3a,
+    Mask: 0x3f,
+    NParams: 2,
+    ToCall: DoWriteSpecialCommand,
+    IntHandler: undefined,
+    Ident: "Write special registers",
+  },
+  // {0x3d, 0x3f, 1, DoReadSpecialCommand, NULL, "Read special registers" },
+  // {0,    0,    0, DoBadCommand, NULL, "Unknown command"} /* Terminator due to 0 mask matching all */
+];
 
 /*--------------------------------------------------------------------------*/
 /* returns a pointer to the data structure for the given command            */
 /* If no matching command is given, the pointer points to an entry with a 0 */
 /* mask, with a sensible function to call.                                  */
-// static const PrimaryCommandLookupType *CommandPtrFromNumber(int CommandNumber) {
-//   const PrimaryCommandLookupType *presptr=PrimaryCommandLookup;
-
-//   for(;presptr->CommandNum!=(presptr->Mask & CommandNumber);presptr++);
-
-//   return(presptr);
-// }
+function CommandPtrFromNumber(CommandNumber: number): PrimaryCommandLookupType {
+  for (const PrimaryCommand of PrimaryCommandLookup) {
+    if (PrimaryCommand.CommandNum === (PrimaryCommand.Mask & CommandNumber)) {
+      return PrimaryCommand;
+    }
+  }
+  throw `not supported ${CommandNumber.toString(16)}`;
+}
 
 /*--------------------------------------------------------------------------*/
 
@@ -1097,111 +1126,123 @@ export function Disc8271Read(Address: number) {
 }
 
 /*--------------------------------------------------------------------------*/
-// static void CommandRegWrite(int Value) {
-//   const PrimaryCommandLookupType *ptr = CommandPtrFromNumber(Value);
+/**
+ * @param Value int
+ */
+function CommandRegWrite(Value: number) {
+  const ptr = CommandPtrFromNumber(Value);
 
-//   #if ENABLE_LOG
-//   WriteLog("8271: Command register write value=0x%02X (Name=%s)\n", Value, ptr->Ident);
-//   #endif
+  // #if ENABLE_LOG
+  // WriteLog("8271: Command register write value=0x%02X (Name=%s)\n", Value, ptr->Ident);
+  // #endif
 
-//   ThisCommand=Value;
-//   NParamsInThisCommand=ptr->NParams;
-//   PresentParam=0;
+  ThisCommand = Value;
+  NParamsInThisCommand = ptr.NParams;
+  PresentParam = 0;
 
-//   StatusReg |= STATUS_REG_COMMAND_BUSY | STATUS_REG_RESULT_FULL; // Observed on beeb for read special
-//   UPDATENMISTATUS;
+  StatusReg |= STATUS_REG_COMMAND_BUSY | STATUS_REG_RESULT_FULL; // Observed on beeb for read special
+  UPDATENMISTATUS();
 
-//   // No parameters then call routine immediately
-//   if (NParamsInThisCommand==0) {
-//     StatusReg&=0x7e;
-//     UPDATENMISTATUS;
-//     ptr->ToCall();
-//   }
-// }
+  // No parameters then call routine immediately
+  if (NParamsInThisCommand == 0) {
+    StatusReg &= 0x7e;
+    UPDATENMISTATUS;
+    ptr.ToCall();
+  }
+}
 
 /*--------------------------------------------------------------------------*/
 
-// static void ParamRegWrite(unsigned char Value) {
-//   // Parameter wanted ?
-//   if (PresentParam>=NParamsInThisCommand) {
-//     #if ENABLE_LOG
-//     WriteLog("8271: Unwanted parameter register write value=0x%02X\n", Value);
-//     #endif
-//   } else {
-//     Params[PresentParam++]=Value;
+/**
+ * @param Value unsigned char
+ */
+function ParamRegWrite(Value: number) {
+  // Parameter wanted ?
+  if (PresentParam >= NParamsInThisCommand) {
+    // #if ENABLE_LOG
+    // WriteLog("8271: Unwanted parameter register write value=0x%02X\n", Value);
+    // #endif
+  } else {
+    Params[PresentParam++] = Value;
 
-//     StatusReg&=0xfe; /* Observed on beeb */
-//     UPDATENMISTATUS;
+    StatusReg &= 0xfe; /* Observed on beeb */
+    UPDATENMISTATUS;
 
-//     // Got all params yet?
-//     if (PresentParam>=NParamsInThisCommand) {
+    // Got all params yet?
+    if (PresentParam >= NParamsInThisCommand) {
+      StatusReg &= 0x7e; /* Observed on beeb */
+      UPDATENMISTATUS;
 
-//       StatusReg&=0x7e; /* Observed on beeb */
-//       UPDATENMISTATUS;
+      const ptr = CommandPtrFromNumber(ThisCommand);
 
-//       const PrimaryCommandLookupType *ptr = CommandPtrFromNumber(ThisCommand);
+      // #if ENABLE_LOG
+      // WriteLog("<Disc access> 8271: All parameters arrived for '%s':", ptr->Ident);
 
-//       #if ENABLE_LOG
-//       WriteLog("<Disc access> 8271: All parameters arrived for '%s':", ptr->Ident);
+      // for (int i = 0; i < PresentParam; i++) {
+      //   WriteLog(" %02X", Params[i]);
+      // }
 
-//       for (int i = 0; i < PresentParam; i++) {
-//         WriteLog(" %02X", Params[i]);
-//       }
+      // WriteLog("\n");
+      // #endif
 
-//       WriteLog("\n");
-//       #endif
-
-//       ptr->ToCall();
-//     }
-//   }
-// }
+      ptr.ToCall();
+    }
+  }
+}
 
 /*--------------------------------------------------------------------------*/
 
 // Address is in the range 0-7 - with the fe80 etc stripped out
 
-// void Disc8271Write(int Address, unsigned char Value) {
-//   if (!DISC_ENABLED)
-//     return;
+/**
+ * @param Address int
+ * @param Value unsigned char
+ */
+export function Disc8271Write(Address: number, Value: number) {
+  // if (!DISC_ENABLED)
+  //   return;
 
-//   // Clear a pending head unload
-//   if (DriveHeadUnloadPending) {
-//     DriveHeadUnloadPending = false;
-//     ClearTrigger(Disc8271Trigger);
-//   }
+  // // Clear a pending head unload
+  // if (DriveHeadUnloadPending) {
+  //   DriveHeadUnloadPending = false;
+  //   ClearTrigger(Disc8271Trigger);
+  // }
 
-//   switch (Address) {
-//     case 0:
-//       CommandRegWrite(Value);
-//       break;
+  switch (Address) {
+    case 0:
+      CommandRegWrite(Value);
+      break;
 
-//     case 1:
-//       ParamRegWrite(Value);
-//       break;
+    case 1:
+      ParamRegWrite(Value);
+      break;
 
-//     case 2:
-//       // DebugTrace("8271: Reset register write, value=0x%02X\n", Value);
+    case 2:
+      throw "not impl";
+      // DebugTrace("8271: Reset register write, value=0x%02X\n", Value);
 
-//       // The caller should write a 1 and then >11 cycles later a 0 - but I'm just going
-//       // to reset on both edges
-//       Disc8271Reset();
-//       break;
+      // The caller should write a 1 and then >11 cycles later a 0 - but I'm just going
+      // to reset on both edges
+      Disc8271Reset();
+      break;
 
-//     case 4:
-//       // DebugTrace("8271: Data register write, value=0x%02X\n", Value);
+    case 4:
+      throw "not impl";
+      // DebugTrace("8271: Data register write, value=0x%02X\n", Value);
 
-//       StatusReg &= ~(STATUS_REG_INTERRUPT_REQUEST | STATUS_REG_NON_DMA_MODE);
-//       UPDATENMISTATUS;
-//       DataReg=Value;
-//       break;
+      // StatusReg &= ~(STATUS_REG_INTERRUPT_REQUEST | STATUS_REG_NON_DMA_MODE);
+      // UPDATENMISTATUS;
+      // DataReg = Value;
+      break;
 
-//     default:
-//       // DebugTrace("8271: Write to unknown register address=%04X, value=%02X\n", Address, Value);
-//       break;
-//   }
+    default:
+      throw "not impl";
+      // DebugTrace("8271: Write to unknown register address=%04X, value=%02X\n", Address, Value);
+      break;
+  }
 
-//   DriveHeadScheduleUnload();
-// }
+  //DriveHeadScheduleUnload();
+}
 
 /*--------------------------------------------------------------------------*/
 // static void DriveHeadScheduleUnload(void) {
@@ -1289,7 +1330,7 @@ function Disc8271_poll_real() {
 
   //   // Set the interrupt flag in the status register
   StatusReg |= STATUS_REG_INTERRUPT_REQUEST;
-  //   UPDATENMISTATUS;
+  UPDATENMISTATUS();
 
   //   if (NextInterruptIsErr != 0) {
   //     ResultReg=NextInterruptIsErr;
@@ -1494,27 +1535,26 @@ function Disc8271_poll_real() {
 
 /*--------------------------------------------------------------------------*/
 
+let InitialInit = true;
 export function Disc8271Reset() {
-  //   static bool InitialInit = true;
-
   //   ResultReg=0;
   StatusReg = 0;
 
-  //   UPDATENMISTATUS;
+  UPDATENMISTATUS();
 
   //   Internal_Scan_SectorNum=0;
   //   Internal_Scan_Count=0; /* Read as two bytes */
-  //   Internal_ModeReg=0;
+  Internal_ModeReg = 0;
   //   Internal_CurrentTrack[0]=Internal_CurrentTrack[1]=0; /* 0/1 for surface number */
-  //   Internal_DriveControlOutputPort=0;
-  //   Internal_DriveControlInputPort=0;
+  Internal_DriveControlOutputPort = 0;
+  Internal_DriveControlInputPort = 0;
   //   Internal_BadTracks[0][0]=Internal_BadTracks[0][1]=Internal_BadTracks[1][0]=Internal_BadTracks[1][1]=0xff; /* 1st subscript is surface 0/1 and second subscript is badtrack 0/1 */
 
-  //   // Default values set by Acorn DFS:
-  //   StepRate = 12;
-  //   HeadSettlingTime = 10;
-  //   IndexCountBeforeHeadUnload = 12;
-  //   HeadLoadTime = 8;
+  // Default values set by Acorn DFS:
+  StepRate = 12;
+  HeadSettlingTime = 10;
+  IndexCountBeforeHeadUnload = 12;
+  HeadLoadTime = 8;
 
   //   if (DriveHeadLoaded) {
   //     DriveHeadUnloadPending = true;
@@ -1523,15 +1563,15 @@ export function Disc8271Reset() {
 
   Disc8271Trigger = ClearTrigger(); /* No Disc8271Triggered events yet */
 
-  //   ThisCommand=-1;
-  //   NParamsInThisCommand=0;
-  //   PresentParam=0;
+  ThisCommand = -1;
+  NParamsInThisCommand = 0;
+  PresentParam = 0;
   //   Selects[0]=Selects[1]=false;
 
-  //   if (InitialInit) {
-  //     InitialInit = false;
-  //     InitDiscStore();
-  //   }
+  if (InitialInit) {
+    InitialInit = false;
+    //InitDiscStore();
+  }
 }
 
 /*--------------------------------------------------------------------------*/
