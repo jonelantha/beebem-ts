@@ -27,9 +27,13 @@ Boston, MA  02110-1301, USA.
 // IDE Interface: JGH jgh@mdfs.net 25/12/2011
 
 import { AdjustForIORead, AdjustForIOWrite, SyncIO } from "./6502core";
-import { AtoDWrite } from "./atodconv";
+import { AtoDRead, AtoDWrite } from "./atodconv";
 import { Disc8271Read, Disc8271Write } from "./disc8271";
-import { SerialACIAWriteControl, SerialULAWrite } from "./serial";
+import {
+  SerialACIAReadStatus,
+  SerialACIAWriteControl,
+  SerialULAWrite,
+} from "./serial";
 import { getIC32State, SysVIARead, SysVIAWrite } from "./sysvia";
 import { UserVIARead, UserVIAWrite } from "./uservia";
 import { CRTCWrite, VideoULARead, VideoULAWrite } from "./video";
@@ -195,11 +199,10 @@ export function BeebReadMem(Address: number) {
   }
 
   if (Address == 0xfe08) {
-    throw "not impl";
-    // SyncIO();
-    // Value = SerialACIAReadStatus();
-    // AdjustForIORead();
-    // return Value;
+    SyncIO();
+    Value = SerialACIAReadStatus();
+    AdjustForIORead();
+    return Value;
   }
 
   if (Address == 0xfe09) {
@@ -236,11 +239,10 @@ export function BeebReadMem(Address: number) {
   }
 
   if ((Address & ~0x1f) == 0xfec0) {
-    throw "not impl";
-    // SyncIO();
-    // Value = AtoDRead(Address & 0xf);
-    // AdjustForIORead();
-    // return Value;
+    SyncIO();
+    Value = AtoDRead(Address & 0xf);
+    AdjustForIORead();
+    return Value;
   }
 
   if ((Address & ~0x1f) == 0xfee0) {

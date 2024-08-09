@@ -73,27 +73,28 @@ export function AtoDWrite(Address: number, Value: number) {
 
 // Address is in the range 0-f - with the fec0 stripped out
 
-//    unsigned char AtoDRead(int Address)
-//    {
-//        unsigned char Value = 0xff;
+/**
+ * @param Address int
+ */
+export function AtoDRead(Address: number) {
+  let Value = 0xff;
 
-//        switch (Address)
-//        {
-//        case 0:
-//            Value = AtoDState.status;
-//            break;
+  switch (Address) {
+    case 0:
+      Value = AtoDState.status;
+      break;
 
-//        case 1:
-//            Value = AtoDState.high;
-//            break;
+    case 1:
+      Value = AtoDState.high;
+      break;
 
-//        case 2:
-//            Value = AtoDState.low;
-//            break;
-//        }
+    case 2:
+      Value = AtoDState.low;
+      break;
+  }
 
-//        return Value;
-//    }
+  return Value;
+}
 
 /*--------------------------------------------------------------------------*/
 function AtoD_poll_real() {

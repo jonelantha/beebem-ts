@@ -28,6 +28,7 @@ import {
   BEEBWRITEMEM_DIRECT,
 } from "./beebmem";
 import { Disc8271Poll } from "./disc8271";
+import { CycleCountTMax, CycleCountWrap } from "./port";
 import { SerialPoll } from "./serial";
 import { SysVIA_poll } from "./sysvia";
 import { UserVIA_poll } from "./uservia";
@@ -51,9 +52,6 @@ const FlagV = 64;
 const FlagN = 128;
 
 export const NO_TIMER_INT_DUE = -1000000;
-
-export const CycleCountTMax = 2147483647;
-export const CycleCountWrap = 2147483647 / 2;
 
 export const SetTrigger = (after: number) => TotalCycles + after;
 export const IncTrigger = (after: number, trigger: number) => trigger + after;
@@ -90,6 +88,8 @@ let IRQCycles: number; // unsigned char
 let intStatus = 0; /* unsigned char, bit set (nums in IRQ_Nums) if interrupt being caused */
 export const setIntStatus = (val: number) => (intStatus = val);
 export const getIntStatus = () => intStatus;
+
+let NMILock = false; // Well I think NMI's are maskable - to stop repeated NMI's - the lock is released when an RTI is done
 
 /* Note how GETCFLAG is special since being bit 0 we don't need to test it to get a clean 0/1 */
 const GETCFLAG = () => (PSR & FlagC) > 0;
@@ -526,12 +526,12 @@ function BVCInstrHandler() {
   } else ProgramCounter++;
 } /* BVCInstrHandler */
 
-// INLINE static void BVSInstrHandler(void) {
-//   if (GETVFLAG) {
-//     ProgramCounter=RelAddrModeHandler_Data();
-//     Branched = true;
-//   } else ProgramCounter++;
-// } /* BVSInstrHandler */
+function BVSInstrHandler() {
+  if (GETVFLAG()) {
+    ProgramCounter = RelAddrModeHandler_Data();
+    Branched = true;
+  } else ProgramCounter++;
+} /* BVSInstrHandler */
 
 /**
  * @param operand int
@@ -892,12 +892,13 @@ function ZeroPgAddrModeHandler_Address() {
 
 /*-------------------------------------------------------------------------*/
 /* Indexed with X preinc addressing mode handler                           */
-// INLINE static int IndXAddrModeHandler_Address()
-// {
-//   unsigned char ZeroPageAddress = (ReadPaged(ProgramCounter++) + XReg) & 0xff;
-//   int EffectiveAddress = WholeRam[ZeroPageAddress] | (WholeRam[ZeroPageAddress + 1] << 8);
-//   return EffectiveAddress;
-// }
+function IndXAddrModeHandler_Address() {
+  const ZeroPageAddress = (ReadPaged(ProgramCounter++) + XReg) & 0xff;
+  const EffectiveAddress =
+    BEEBREADMEM_DIRECT(ZeroPageAddress) |
+    (BEEBREADMEM_DIRECT(ZeroPageAddress + 1) << 8);
+  return EffectiveAddress;
+}
 
 /*-------------------------------------------------------------------------*/
 /* Indexed with Y postinc addressing mode handler                          */
@@ -1038,7 +1039,7 @@ export function Init6502core() {
 
   intStatus = 0;
   // NMIStatus = 0;
-  // NMILock = false;
+  NMILock = false;
 }
 
 /*-------------------------------------------------------------------------*/
@@ -1140,10 +1141,10 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: NOP zp
       // 			ZeroPgAddrModeHandler_Address();
       // 			break;
-      // 		case 0x05:
-      // 			// ORA zp
-      // 			ORAInstrHandler(WholeRam[ZeroPgAddrModeHandler_Address()]);
-      // 			break;
+      case 0x05:
+        // ORA zp
+        ORAInstrHandler(BeebReadMem(ZeroPgAddrModeHandler_Address()));
+        break;
       // 		case 0x06:
       // 			// ASL zp
       // 			ASLInstrHandler(ZeroPgAddrModeHandler_Address());
@@ -1419,12 +1420,12 @@ export function Exec6502Instruction() {
       // 				ANDInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0x40:
-      // 			// RTI
-      // 			PSR = Pop();
-      // 			ProgramCounter = PopWord();
-      // 			NMILock = false;
-      // 			break;
+      case 0x40:
+        // RTI
+        PSR = Pop();
+        ProgramCounter = PopWord();
+        NMILock = false;
+        break;
       // 		case 0x41:
       // 			// EOR (zp,X)
       // 			EORInstrHandler(IndXAddrModeHandler_Data());
@@ -1632,10 +1633,10 @@ export function Exec6502Instruction() {
         // ADC abs
         ADCInstrHandler(AbsAddrModeHandler_Data());
         break;
-      // 		case 0x6e:
-      // 			// ROR abs
-      // 			RORInstrHandler(AbsAddrModeHandler_Address());
-      // 			break;
+      case 0x6e:
+        // ROR abs
+        RORInstrHandler(AbsAddrModeHandler_Address());
+        break;
       // 		case 0x6f: {
       // 				// Undocumented instruction: RRA abs
       // 				int Address = AbsAddrModeHandler_Address();
@@ -1643,10 +1644,10 @@ export function Exec6502Instruction() {
       // 				ADCInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0x70:
-      // 			// BVS rel
-      // 			BVSInstrHandler();
-      // 			break;
+      case 0x70:
+        // BVS rel
+        BVSInstrHandler();
+        break;
       // 		case 0x71:
       // 			// ADC (zp),Y
       // 			ADCInstrHandler(IndYAddrModeHandler_Data());
@@ -1725,11 +1726,11 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: NOP imm
       // 			ReadPaged(ProgramCounter++);
       // 			break;
-      // 		case 0x81:
-      // 			// STA (zp,X)
-      // 			AdvanceCyclesForMemWrite();
-      // 			WritePaged(IndXAddrModeHandler_Address(), Accumulator);
-      // 			break;
+      case 0x81:
+        // STA (zp,X)
+        AdvanceCyclesForMemWrite();
+        WritePaged(IndXAddrModeHandler_Address(), Accumulator);
+        break;
       // 		case 0x82:
       // 		case 0xc2:
       // 		case 0xe2:
@@ -2139,10 +2140,10 @@ export function Exec6502Instruction() {
         // CLD
         PSR &= 255 - FlagD;
         break;
-      // 		case 0xd9:
-      // 			// CMP abs,Y
-      // 			CMPInstrHandler(AbsYAddrModeHandler_Data());
-      // 			break;
+      case 0xd9:
+        // CMP abs,Y
+        CMPInstrHandler(AbsYAddrModeHandler_Data());
+        break;
       // 		case 0xda:
       // 			// Undocumented instruction: NOP
       // 			break;
@@ -2226,10 +2227,10 @@ export function Exec6502Instruction() {
         // CPX abs
         CPXInstrHandler(AbsAddrModeHandler_Data());
         break;
-      // 		case 0xed:
-      // 			// SBC abs
-      // 			SBCInstrHandler(AbsAddrModeHandler_Data());
-      // 			break;
+      case 0xed:
+        // SBC abs
+        SBCInstrHandler(AbsAddrModeHandler_Data());
+        break;
       case 0xee:
         // INC abs
         INCInstrHandler(AbsAddrModeHandler_Address());
@@ -2279,10 +2280,10 @@ export function Exec6502Instruction() {
       // 			// SED
       // 			PSR |= FlagD;
       // 			break;
-      // 		case 0xf9:
-      // 			// SBC abs,Y
-      // 			SBCInstrHandler(AbsYAddrModeHandler_Data());
-      // 			break;
+      case 0xf9:
+        // SBC abs,Y
+        SBCInstrHandler(AbsYAddrModeHandler_Data());
+        break;
       // 		case 0xfa:
       // 			// Undocumented instruction: NOP
       // 			break;
@@ -2317,7 +2318,7 @@ export function Exec6502Instruction() {
       CurrentInstruction == 0x10 ||
       CurrentInstruction == 0x30 ||
       CurrentInstruction == 0x50 ||
-      //CurrentInstruction == 0x70 ||
+      CurrentInstruction == 0x70 ||
       CurrentInstruction == 0x90 ||
       CurrentInstruction == 0xb0 ||
       CurrentInstruction == 0xd0 ||
@@ -2349,7 +2350,6 @@ export function Exec6502Instruction() {
       CyclesToInt <= -2 - IOCycles &&
       !iFlagJustCleared
     ) {
-      throw "not impl";
       // Int noticed 2 cycles before end of instruction - interrupt now
       CyclesToInt = NO_TIMER_INT_DUE;
       DoInterrupt();

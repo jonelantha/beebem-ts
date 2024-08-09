@@ -512,13 +512,13 @@ export function SysVIARead(Address: number) {
     //     case 12:
     //       tmp = SysVIAState.pcr;
     //       break;
-    //     case 13:
-    //       UpdateIFRTopBit();
-    // #ifdef KBDDEBUG
-    //       // DebugTrace("Read IFR got=0x%02x\n", SysVIAState.ifr);
-    // #endif
-    //       tmp = SysVIAState.ifr;
-    //       break;
+    case 13:
+      UpdateIFRTopBit();
+      // #ifdef KBDDEBUG
+      //       // DebugTrace("Read IFR got=0x%02x\n", SysVIAState.ifr);
+      // #endif
+      tmp = SysVIAState.ifr;
+      break;
     case 14:
       tmp = SysVIAState.ier | 0x80;
       break;

@@ -22,9 +22,7 @@ Boston, MA  02110-1301, USA.
 
 import {
   ClearTrigger,
-  CycleCountTMax,
   getCyclesToInt,
-  getInstCount,
   getIntStatus,
   getTotalCycles,
   IRQ_userVia,
@@ -33,6 +31,7 @@ import {
   setIntStatus,
   SetTrigger,
 } from "./6502core";
+import { CycleCountTMax } from "./port";
 import { VIAReset, VIAState } from "./via";
 
 // Shift Register

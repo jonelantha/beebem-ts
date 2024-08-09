@@ -27,6 +27,23 @@ Boston, MA  02110-1301, USA.
 // See https://beebwiki.mdfs.net/Acorn_cassette_format
 // and http://electrem.emuunlim.com/UEFSpecs.html
 
+// header
+
+import { SetTrigger } from "./6502core";
+import { CycleCountTMax } from "./port";
+
+// MC6850 status register bits
+const MC6850_STATUS_RDRF = 0x01;
+const MC6850_STATUS_TDRE = 0x02;
+const MC6850_STATUS_DCD = 0x04;
+const MC6850_STATUS_CTS = 0x08;
+const MC6850_STATUS_FE = 0x10;
+const MC6850_STATUS_OVRN = 0x20;
+const MC6850_STATUS_PE = 0x40;
+const MC6850_STATUS_IRQ = 0x80;
+
+// main
+
 // MC6850 control register bits
 const MC6850_CONTROL_COUNTER_DIVIDE = 0x03;
 const MC6850_CONTROL_MASTER_RESET = 0x03;
@@ -48,14 +65,14 @@ const MC6850_CONTROL_RIE = 0x80;
 // unsigned int Rx_Rate = 1200; // Recieve baud rate
 // unsigned char Clk_Divide = 1; // Clock divide rate
 
-// unsigned char ACIA_Status; // 6850 ACIA Status register
+let ACIA_Status = 0; // unsigned char 6850 ACIA Status register
 // unsigned char ACIA_Control; // 6850 ACIA Control register
 let SerialULAControl = 0; // unsigned char  Serial ULA / SERPROC control register
 
-// static bool RTS;
-// static bool FirstReset = true;
-// static bool DCD = false;
-// static bool DCDI = true;
+let RTS = false;
+let FirstReset = true;
+let DCD = false;
+let DCDI = true;
 // static bool ODCDI = true;
 // static unsigned char DCDClear = 0; // count to clear DCD bit
 
@@ -111,8 +128,8 @@ let SerialULAControl = 0; // unsigned char  Serial ULA / SERPROC control registe
 // };
 
 // bool OldRelayState = false;
-// CycleCountT TapeTrigger=CycleCountTMax;
-// constexpr int TAPECYCLES = 2000000 / 5600; // 5600 is normal tape speed
+let TapeTrigger = CycleCountTMax;
+const TAPECYCLES = 2000000 / 5600; // 5600 is normal tape speed
 
 // static int UEFBuf = 0;
 // static int OldUEFBuf = 0;
@@ -134,24 +151,23 @@ export function SerialACIAWriteControl(Value: number) {
   // Master reset - clear all bits in the status register, except for
   // external conditions on CTS and DCD.
   if ((Value & MC6850_CONTROL_COUNTER_DIVIDE) == MC6850_CONTROL_MASTER_RESET) {
-    // ACIA_Status &= MC6850_STATUS_CTS;
-    // ACIA_Status |= MC6850_STATUS_DCD;
-    // // Master reset clears IRQ
-    // ACIA_Status &= ~MC6850_STATUS_IRQ;
-    // intStatus &= ~(1 << serial);
-    // if (FirstReset)
-    // {
-    // 	// RTS High on first Master reset.
-    // 	ACIA_Status |= MC6850_STATUS_CTS;
-    // 	FirstReset = false;
-    // 	RTS = true;
-    // }
-    // ACIA_Status &= ~MC6850_STATUS_DCD;
-    // DCD = false;
-    // DCDI = false;
-    // // DCDClear = 0;
-    // ACIA_Status |= MC6850_STATUS_TDRE; // Transmit data register empty
-    // SetTrigger(TAPECYCLES, TapeTrigger);
+    ACIA_Status &= MC6850_STATUS_CTS;
+    ACIA_Status |= MC6850_STATUS_DCD;
+    // Master reset clears IRQ
+    ACIA_Status &= ~MC6850_STATUS_IRQ;
+    //intStatus &= ~(1 << serial);
+    if (FirstReset) {
+      // RTS High on first Master reset.
+      ACIA_Status |= MC6850_STATUS_CTS;
+      FirstReset = false;
+      RTS = true;
+    }
+    ACIA_Status &= ~MC6850_STATUS_DCD;
+    DCD = false;
+    DCDI = false;
+    // DCDClear = 0;
+    ACIA_Status |= MC6850_STATUS_TDRE; // Transmit data register empty
+    TapeTrigger = SetTrigger(TAPECYCLES);
   }
 
   // Clock Divide
@@ -249,28 +265,27 @@ export function SerialULAWrite(Value: number) {
 // 	return SerialULAControl;
 // }
 
-// unsigned char SerialACIAReadStatus()
-// {
-// //	if (!DCDI && DCD)
-// //	{
-// //		DCDClear++;
-// //		if (DCDClear > 1) {
-// //			DCD = false;
-// //			ACIA_Status &= ~(1 << MC6850_STATUS_DCS);
-// //			DCDClear = 0;
-// //		}
-// //	}
+export function SerialACIAReadStatus() {
+  if (!DCDI && DCD) {
+    throw "not impl";
+    // DCDClear++;
+    // if (DCDClear > 1) {
+    //   DCD = false;
+    //   ACIA_Status &= ~(1 << MC6850_STATUS_DCS);
+    //   DCDClear = 0;
+    // }
+  }
 
-// 	if (DebugEnabled)
-// 	{
-// 		DebugDisplayTraceF(DebugType::Serial, "Serial: Read ACIA status %02X", (int)ACIA_Status);
-// 	}
+  // if (DebugEnabled)
+  // {
+  // 	DebugDisplayTraceF(DebugType::Serial, "Serial: Read ACIA status %02X", (int)ACIA_Status);
+  // }
 
-// 	// WriteLog("Serial: Read ACIA status %02X\n", (int)ACIA_Status);
+  // WriteLog("Serial: Read ACIA status %02X\n", (int)ACIA_Status);
 
-// 	// See https://github.com/stardot/beebem-windows/issues/47
-// 	return ACIA_Status;
-// }
+  // See https://github.com/stardot/beebem-windows/issues/47
+  return ACIA_Status;
+}
 
 // static void HandleData(unsigned char Data)
 // {
