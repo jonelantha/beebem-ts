@@ -71,8 +71,8 @@ if (!memFile) throw "no mem param";
     evt.preventDefault();
     TranslateKey(evt.keyCode, true);
   });
-  window.addEventListener("blur", () => {
-    BeebReleaseAllKeys();
+  document.addEventListener("visibilitychange", () => {
+    document.visibilityState === "hidden" && BeebReleaseAllKeys();
   });
 
   await Initialise();
