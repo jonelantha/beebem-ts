@@ -79,7 +79,10 @@ function WrapAddr(Address: number) {
    See 'BeebMemPtrWithWrapMo7' for use in Mode 7 - it's a special case.
 */
 
-export function BeebMemPtrWithWrap(Address: number, Length: number) {
+export function BeebMemPtrWithWrap(
+  Address: number,
+  Length: number,
+): Uint8Array {
   // static unsigned char tmpBuf[1024];
   // unsigned char *tmpBufPtr;
 
@@ -87,7 +90,7 @@ export function BeebMemPtrWithWrap(Address: number, Length: number) {
   const EndAddress = WrapAddr(Address + Length - 1);
 
   if (Address <= EndAddress) {
-    return Address;
+    return new Uint8Array(WholeRam.buffer, Address, Length);
   }
 
   throw "not impl";
@@ -131,6 +134,11 @@ export function BeebMemPtrWithWrap(Address: number, Length: number) {
 // memory from 0x3c00 to 0x3fff then 0x7c00 to 0x7fff giving a 2K linear
 // buffer.
 
+// A = Address & 0x3ff
+// 0x2000 - 0x23ff = [A = x - 0x2000] => 0x3c00 + A => same v
+// 0x2400 - 0x27ff = [A = x - 0x2400] => 0x3c00 + A => same ^
+// 0x2800 - 0x2bff = [A = x - 0x2800] => 0x4000 + 0x3c00 + A => 0x7c00 + A
+
 function WrapAddrMode7(Address: number) {
   return ((Address & 0x800) << 3) | 0x3c00 | (Address & 0x3ff);
 }
@@ -139,22 +147,24 @@ function WrapAddrMode7(Address: number) {
 
 // Special case of BeebMemPtrWithWrap for use in mode 7
 
-export function BeebMemPtrWithWrapMode7(Address: number, Length: number) {
-  const start = WrapAddrMode7(Address);
-  const end = WrapAddrMode7(Address + Length);
+export function BeebMemPtrWithWrapMode7(
+  Address: number,
+  Length: number,
+): Uint8Array {
+  const mappedStart = WrapAddrMode7(Address);
+  const mappedEnd = WrapAddrMode7(Address + Length);
 
-  if (start + Length !== end) throw "not impl";
+  if (mappedStart + Length === mappedEnd) {
+    return new Uint8Array(WholeRam.buffer, mappedStart, Length);
+  }
 
-  return WrapAddrMode7(Address);
-  // static unsigned char tmpBuf[1024];
+  const tmpBuf = new Uint8Array(Length);
 
-  // const unsigned char *Memory = WholeRam;
+  for (let i = 0; i < Length; i++, Address++) {
+    tmpBuf[i] = WholeRam[WrapAddrMode7(Address)];
+  }
 
-  // for (int i = 0; i < Length; i++, Address++) {
-  // 	tmpBuf[i] = Memory[WrapAddrMode7(Address)];
-  // }
-
-  // return tmpBuf;
+  return tmpBuf;
 }
 
 /*----------------------------------------------------------------------------*/

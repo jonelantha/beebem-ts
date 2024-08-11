@@ -125,7 +125,7 @@ type VideoState = {
                             blank vertical retrace lines at the bottom of the screen. */;
   PreviousLastPixmapLine: number /* The last pixmap line on the previous frame */;
   IsTeletext: boolean /* This frame is a teletext frame - do things differently */;
-  DataPtr: number /* Pointer into host memory of video data */;
+  DataBuf: Uint8Array | undefined /* Pointer into host memory of video data */;
 
   CharLine: number /* 6845 counts in characters vertically - 0 at the top , incs by 1 - -1 means we are in the bit before the actual display starts */;
   InCharLineUp: number /* Scanline within a character line - counts up*/;
@@ -144,7 +144,7 @@ const VideoState: VideoState = {
   LastPixmapLine: 0,
   PreviousLastPixmapLine: 0,
   IsTeletext: false,
-  DataPtr: 0,
+  DataBuf: undefined,
   CharLine: 0,
   InCharLineUp: 0,
   VSyncState: 0,
@@ -722,54 +722,52 @@ function VideoStartOfFrame() {
 /*--------------------------------------------------------------------------*/
 /* Scanline processing for modes with fast 6845 clock - i.e. narrow pixels  */
 function LowLevelDoScanLineNarrow() {
-  const WholeRam = getWholeRam();
+  const dataBuf = VideoState.DataBuf!;
   let BytesToGo = CRTC_HorizontalDisplayed;
   let vidPtr = GetLinePtr(VideoState.PixmapLine);
 
   /* If the step is 4 then each byte corresponds to one entry in the fasttable
      and thus we can copy it really easily (and fast!) */
-  let CurrentPtr = VideoState.DataPtr + VideoState.InCharLineUp;
+  let CurrentPtr = VideoState.InCharLineUp;
 
   /* This should help the compiler - it doesn't need to test for end of loop
      except every 4 entries */
   BytesToGo /= 4;
   for (; BytesToGo; CurrentPtr += 32, BytesToGo--) {
-    vidPtr = write8UChars(vidPtr, FastTable[WholeRam[CurrentPtr]]);
-    vidPtr = write8UChars(vidPtr, FastTable[WholeRam[CurrentPtr + 8]]);
-    vidPtr = write8UChars(vidPtr, FastTable[WholeRam[CurrentPtr + 16]]);
-    vidPtr = write8UChars(vidPtr, FastTable[WholeRam[CurrentPtr + 24]]);
+    vidPtr = write8UChars(vidPtr, FastTable[dataBuf[CurrentPtr]]);
+    vidPtr = write8UChars(vidPtr, FastTable[dataBuf[CurrentPtr + 8]]);
+    vidPtr = write8UChars(vidPtr, FastTable[dataBuf[CurrentPtr + 16]]);
+    vidPtr = write8UChars(vidPtr, FastTable[dataBuf[CurrentPtr + 24]]);
   }
 }
 
 /*-----------------------------------------------------------------------------*/
 /* Scanline processing for the low clock rate modes                            */
 function LowLevelDoScanLineWide() {
-  const WholeRam = getWholeRam();
+  const dataBuf = VideoState.DataBuf!;
   let BytesToGo = CRTC_HorizontalDisplayed;
 
   let vidPtr = GetLinePtr(VideoState.PixmapLine);
 
   /* If the step is 4 then each byte corresponds to one entry in the fasttable
      and thus we can copy it really easily (and fast!) */
-  let CurrentPtr = VideoState.DataPtr + VideoState.InCharLineUp;
+  let CurrentPtr = VideoState.InCharLineUp;
 
   /* This should help the compiler - it doesn't need to test for end of loop
      except every 4 entries */
   BytesToGo /= 4;
 
   for (; BytesToGo; CurrentPtr += 32, BytesToGo--) {
-    vidPtr = write16UChars(vidPtr, FastTableDWidth[WholeRam[CurrentPtr]]);
-    vidPtr = write16UChars(vidPtr, FastTableDWidth[WholeRam[CurrentPtr + 8]]);
-    vidPtr = write16UChars(vidPtr, FastTableDWidth[WholeRam[CurrentPtr + 16]]);
-    vidPtr = write16UChars(vidPtr, FastTableDWidth[WholeRam[CurrentPtr + 24]]);
+    vidPtr = write16UChars(vidPtr, FastTableDWidth[dataBuf[CurrentPtr]]);
+    vidPtr = write16UChars(vidPtr, FastTableDWidth[dataBuf[CurrentPtr + 8]]);
+    vidPtr = write16UChars(vidPtr, FastTableDWidth[dataBuf[CurrentPtr + 16]]);
+    vidPtr = write16UChars(vidPtr, FastTableDWidth[dataBuf[CurrentPtr + 24]]);
   }
 }
 
 /*-------------------------------------------------------------------------------------------------------------*/
 /* Do all the pixel rows for one row of teletext characters                                                    */
 function DoMode7Row() {
-  const WholeRam = getWholeRam();
-  const CurrentPtr = VideoState.DataPtr;
   let CurrentChar: number;
   let byte: number;
   let Foreground = 7;
@@ -815,7 +813,7 @@ function DoMode7Row() {
     HoldGraphChar = NextHoldGraphChar;
     HoldSeparated = NextHoldSeparated;
     Graphics = NextGraphics;
-    byte = WholeRam[CurrentPtr + CurrentChar];
+    byte = VideoState.DataBuf![CurrentChar];
     if (byte < 32) byte += 128; // fix for naughty programs that use 7-bit control codes - Richard Gellman
     if (byte & 32 && Graphics) {
       NextHoldGraphChar = byte;
@@ -1068,7 +1066,7 @@ export function VideoDoScanLine() {
       VideoState.CharLine < CRTC_VerticalDisplayed &&
       VideoState.InCharLineUp == 0
     ) {
-      VideoState.DataPtr = BeebMemPtrWithWrapMode7(
+      VideoState.DataBuf = BeebMemPtrWithWrapMode7(
         VideoState.Addr,
         CRTC_HorizontalDisplayed,
       );
@@ -1171,7 +1169,7 @@ export function VideoDoScanLine() {
 
       /* If first row of character then get the data pointer from memory */
       if (VideoState.InCharLineUp == 0) {
-        VideoState.DataPtr = BeebMemPtrWithWrap(
+        VideoState.DataBuf = BeebMemPtrWithWrap(
           VideoState.Addr * 8,
           CRTC_HorizontalDisplayed * 8,
         );
@@ -1283,7 +1281,7 @@ function AdjustVideo() {
 export function VideoInit() {
   VideoStartOfFrame();
 
-  VideoState.DataPtr = BeebMemPtrWithWrap(0x3000, 640);
+  VideoState.DataBuf = BeebMemPtrWithWrap(0x3000, 640);
   VideoTriggerCount = SetTrigger(99); // Give time for OS to set mode up before doing anything silly
   FastTable_Valid = false;
 
@@ -1563,4 +1561,16 @@ export function tempVideoOverride(videoOverrides: VideoOverrides) {
   for (let i = 0; i < 16; i++) {
     VideoULA_Palette[i] = videoOverrides.VideoULA_Palette[i];
   }
+}
+
+/*-------------------------------------------------------------------------*/
+
+export function DebugVideoState() {
+  console.log(
+    `CRTC: HTot=${CRTC_HorizontalTotal.toString(16)} HDis=${CRTC_HorizontalDisplayed.toString(16)} HSyn=${CRTC_HorizontalSyncPos.toString(16)} SWid=${CRTC_SyncWidth.toString(16)} VTot=${CRTC_VerticalTotal.toString(16)} VAdj=${CRTC_VerticalTotalAdjust.toString(16)} VDis=${CRTC_VerticalDisplayed.toString(16)} VSyn=${CRTC_VerticalSyncPos.toString(16)}`,
+  );
+
+  console.log(
+    `CRTC: IntD=${CRTC_InterlaceAndDelay.toString(16)} SLCh=${CRTC_ScanLinesPerChar.toString(16)} CurS=${CRTC_CursorStart.toString(16)} CurE=${CRTC_CursorEnd.toString(16)} ScrS=${CRTC_ScreenStartHigh.toString(16)}${CRTC_ScreenStartLow.toString(16)} CurP=${CRTC_CursorPosHigh.toString(16)}${CRTC_CursorPosLow.toString(16)} VidULA=${VideoULA_ControlReg.toString(16)}`,
+  );
 }
