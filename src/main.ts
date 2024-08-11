@@ -64,10 +64,14 @@ if (!memFile) throw "no mem param";
 
 (async function run() {
   document.addEventListener("keydown", evt => {
+    if (evt.metaKey) return;
+
     evt.preventDefault();
     TranslateKey(evt.keyCode, false);
   });
   document.addEventListener("keyup", evt => {
+    if (evt.metaKey) return;
+
     evt.preventDefault();
     TranslateKey(evt.keyCode, true);
   });
