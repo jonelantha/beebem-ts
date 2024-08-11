@@ -75,16 +75,21 @@ if (!memFile) throw "no mem param";
     evt.preventDefault();
     TranslateKey(evt.keyCode, true);
   });
-  document.addEventListener("visibilitychange", () => {
-    document.visibilityState === "hidden" && BeebReleaseAllKeys();
-  });
+
+  window.removeEventListener("blur", () => BeebReleaseAllKeys());
 
   await Initialise();
 
-  const start = performance.now();
-
-  while (performance.now() - start < 1000) {
+  while (true) {
     const sleepTime = Exec6502Instruction();
     if (sleepTime) await new Promise<void>(res => setTimeout(res, sleepTime));
+
+    document.hasFocus() || (await focusPromise());
   }
 })(); // needed for safari to pick up top level throws
+
+function focusPromise() {
+  return new Promise<void>(res => {
+    window.addEventListener("focus", () => res(), { once: true });
+  });
+}
