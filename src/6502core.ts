@@ -61,10 +61,10 @@ export const ClearTrigger = () => CycleCountTMax;
 // util
 
 const charToSignedChar = (char: number) => (char & 0x80 ? char - 0x100 : char);
-const intToUnsignedChar = (val: number) => {
-  if (val > 127 || val < -128) throw `out of range ${val.toString(16)}`;
-  return val >= 0 ? val : val + 0x100;
-};
+// const intToUnsignedChar = (val: number) => {
+//   if (val > 127 || val < -128) throw `out of range ${val.toString(16)}`;
+//   return val >= 0 ? val : val + 0x100;
+// };
 const charToUnsignedChar = (val: number) => {
   if (val > 0xff || val < -0xff) throw `out of range ${val.toString(16)}`;
   return val >= 0 ? val : val + 0xff;
@@ -924,11 +924,10 @@ function IndYAddrModeHandler_Address() {
 
 /*-------------------------------------------------------------------------*/
 /* Zero page wih X offset addressing mode handler                          */
-// INLINE static int ZeroPgXAddrModeHandler_Data()
-// {
-// 	int EffectiveAddress = (ReadPaged(ProgramCounter++) + XReg) & 255;
-// 	return WholeRam[EffectiveAddress];
-// }
+function ZeroPgXAddrModeHandler_Data() {
+  const EffectiveAddress = (ReadPaged(ProgramCounter++) + XReg) & 255;
+  return BeebReadMem(EffectiveAddress);
+}
 
 /*-------------------------------------------------------------------------*/
 /* Zero page wih X offset addressing mode handler                          */
@@ -1559,10 +1558,10 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: NOP abs,x
       // 			AbsXAddrModeHandler_Data();
       // 			break;
-      // 		case 0x5d:
-      // 			// EOR abs,X
-      // 			EORInstrHandler(AbsXAddrModeHandler_Data());
-      // 			break;
+      case 0x5d:
+        // EOR abs,X
+        EORInstrHandler(AbsXAddrModeHandler_Data());
+        break;
       // 		case 0x5e:
       // 			// LSR abs,X
       // 			LSRInstrHandler(AbsXAddrModeHandler_Address());
@@ -1978,10 +1977,10 @@ export function Exec6502Instruction() {
       // 			// LDY zp,X
       // 			LDYInstrHandler(ZeroPgXAddrModeHandler_Data());
       // 			break;
-      // 		case 0xb5:
-      // 			// LDA zp,X
-      // 			LDAInstrHandler(ZeroPgXAddrModeHandler_Data());
-      // 			break;
+      case 0xb5:
+        // LDA zp,X
+        LDAInstrHandler(ZeroPgXAddrModeHandler_Data());
+        break;
       // 		case 0xb6:
       // 			// LDX zp,Y
       // 			LDXInstrHandler(ZeroPgYAddrModeHandler_Data());
