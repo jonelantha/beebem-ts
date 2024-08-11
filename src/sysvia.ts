@@ -27,7 +27,6 @@ keyboard emulation - David Alan Gilbert 30/10/94 */
 
 import {
   getCyclesToInt,
-  getInstCount,
   getIntStatus,
   IRQ_sysVia,
   NO_TIMER_INT_DUE,
@@ -98,7 +97,7 @@ let KBDCol = 0; // unsigned int
 const SysViaKbdState = Array.from({ length: 16 }, () =>
   Array.from({ length: 8 }, () => false),
 ); // Col, row
-const KeysDown = 0; // static int
+let KeysDown = 0; // static int
 
 // Master 128 MC146818AP Real-Time Clock and RAM
 //static time_t RTCTimeOffset = 0;
@@ -138,25 +137,25 @@ export function PulseSysViaCB1() {
 }
 
 /*--------------------------------------------------------------------------*/
-// void BeebKeyUp(int row,int col) {
-//   if (row<0 || col<0) return;
+export function BeebKeyUp(row: number, col: number) {
+  if (row < 0 || col < 0) return;
 
-//   /* Update keys down count - unless its shift/control */
-//   if ((SysViaKbdState[col][row]) && (row!=0)) KeysDown--;
+  /* Update keys down count - unless its shift/control */
+  if (SysViaKbdState[col][row] && row != 0) KeysDown--;
 
-//   SysViaKbdState[col][row] = false;
-// }
+  SysViaKbdState[col][row] = false;
+}
 
 /*--------------------------------------------------------------------------*/
-// void BeebReleaseAllKeys() {
-//   KeysDown = 0;
+export function BeebReleaseAllKeys() {
+  KeysDown = 0;
 
-//   for (int row = 0;row < 8; row++) {
-//     for (int col = 0; col < 16; col++) {
-//       SysViaKbdState[col][row] = false;
-//     }
-//   }
-// }
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 16; col++) {
+      SysViaKbdState[col][row] = false;
+    }
+  }
+}
 
 /*--------------------------------------------------------------------------*/
 function DoKbdIntCheck() {
@@ -170,23 +169,21 @@ function DoKbdIntCheck() {
   // #endif
 
   if (KeysDown > 0 && (SysVIAState.pcr & 0xc) == 4) {
-    throw "not impl";
-    // if ((IC32State & 8)==8) {
-    //   SysVIAState.ifr|=1; /* CA2 */
-    //   // DebugTrace("DoKbdIntCheck: Caused interrupt case 1\n");
-    //   UpdateIFRTopBit();
-    // } else {
-    //   if (KBDCol<15) {
-    //     int presrow;
-    //     for(presrow=1;presrow<8;presrow++) {
-    //       if (SysViaKbdState[KBDCol][presrow]) {
-    //         SysVIAState.ifr|=1;
-    //         // DebugTrace("DoKbdIntCheck: Caused interrupt case 2\n");
-    //         UpdateIFRTopBit();
-    //       }
-    //     } /* presrow */
-    //   } /* KBDCol range */
-    // } /* WriteEnable on */
+    if ((getIC32State() & 8) == 8) {
+      SysVIAState.ifr |= 1; /* CA2 */
+      // DebugTrace("DoKbdIntCheck: Caused interrupt case 1\n");
+      UpdateIFRTopBit();
+    } else {
+      if (KBDCol < 15) {
+        for (let presrow = 1; presrow < 8; presrow++) {
+          if (SysViaKbdState[KBDCol][presrow]) {
+            SysVIAState.ifr |= 1;
+            // DebugTrace("DoKbdIntCheck: Caused interrupt case 2\n");
+            UpdateIFRTopBit();
+          }
+        } /* presrow */
+      } /* KBDCol range */
+    } /* WriteEnable on */
   } /* Keys down and CA2 input enabled */
 
   // #ifdef KBDDEBUG
@@ -198,16 +195,16 @@ function DoKbdIntCheck() {
 }
 
 /*--------------------------------------------------------------------------*/
-// void BeebKeyDown(int row,int col) {
-//   if (row<0 || col<0) return;
+export function BeebKeyDown(row: number, col: number) {
+  if (row < 0 || col < 0) return;
 
-//   /* Update keys down count - unless its shift/control */
-//   if ((!SysViaKbdState[col][row]) && (row!=0)) KeysDown++;
+  /* Update keys down count - unless its shift/control */
+  if (!SysViaKbdState[col][row] && row != 0) KeysDown++;
 
-//   SysViaKbdState[col][row] = true;
+  SysViaKbdState[col][row] = true;
 
-//   DoKbdIntCheck();
-// }
+  DoKbdIntCheck();
+}
 
 /*--------------------------------------------------------------------------*/
 /* Return current state of the single bi output of the keyboard matrix - NOT the
@@ -611,7 +608,7 @@ export function SysVIA_poll(ncycles: number) {
   }
 
   // Ensure that CA2 keyboard interrupt is asserted when key pressed
-  //DoKbdIntCheck();
+  DoKbdIntCheck();
 
   // Do Shift register stuff
   // if (SRMode == 2) {
@@ -625,7 +622,7 @@ export function SysVIAReset() {
   VIAReset(SysVIAState);
 
   // Make it no keys down and no dip switches set
-  // BeebReleaseAllKeys();
+  BeebReleaseAllKeys();
 
   // SRData = 0;
   SRMode = 0;

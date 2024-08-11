@@ -36,6 +36,14 @@ import {
 
 export const REAL_TIME_TARGET = 1.0;
 
+export type KeyMapping = {
+  row: number; // Beeb row
+  col: number; // Beeb col
+  shift: boolean; // Beeb shift state
+};
+
+export type KeyMap = KeyMapping[][]; // Indices are: [Virt key][shift state]
+
 export type EightUChars = [
   a: number,
   b: number,

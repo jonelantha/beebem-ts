@@ -33,9 +33,10 @@ import { getTotalCycles, Init6502core } from "./6502core";
 import { AtoDInit } from "./atodconv";
 import { BeebMemInit } from "./beebmem";
 import { bufferHeight, bufferWidth, InitSurfaces } from "./beebwindx";
-import { REAL_TIME_TARGET } from "./beebwinh";
+import { KeyMap, KeyMapping, REAL_TIME_TARGET } from "./beebwinh";
 import { Disc8271Reset } from "./disc8271";
-import { SysVIAReset } from "./sysvia";
+import { defaultKeymapData } from "./keymap";
+import { BeebKeyDown, BeebKeyUp, SysVIAReset } from "./sysvia";
 import { UserVIAReset } from "./uservia";
 import { BuildMode7Font, VideoInit } from "./video";
 
@@ -51,6 +52,25 @@ export const getPrimaryContext = () =>
     "2d",
   )!;
 
+// header
+
+let m_ShiftPressed = false;
+const m_vkeyPressed = Array.from({ length: 256 }, () => ({
+  row: -1,
+  col: -1,
+  rowShift: -1,
+  colShift: -1,
+}));
+
+// main
+
+// Keyboard mappings
+let defaultMapping: KeyMap;
+//let KeyMap logicalMapping;
+
+/* Currently selected translation table */
+let transTable: KeyMap;
+
 /****************************************************************************/
 export async function Initialise() {
   ResetTiming();
@@ -65,6 +85,9 @@ export async function Initialise() {
 
 /****************************************************************************/
 async function ApplyPrefs() {
+  defaultMapping = ReadKeyMap(defaultKeymapData);
+  transTable = defaultMapping;
+
   InitSurfaces();
 
   await ResetBeebSystem(true);
@@ -101,6 +124,87 @@ export function CreateBeebWindow() {
   ) as HTMLCanvasElement;
   primaryCanvas.width = primaryWidth;
   primaryCanvas.height = primaryHeight;
+}
+
+/****************************************************************************/
+export function TranslateKey(vkey: number, keyUp: boolean) {
+  // returns row
+  if (vkey < 0 || vkey > 255) return -9;
+
+  // Key track of shift state
+  if (transTable[vkey][0].row == 0 && transTable[vkey][0].col == 0) {
+    m_ShiftPressed = !keyUp;
+  }
+
+  if (keyUp) {
+    // Key released, lookup beeb row + col that this vkey
+    // mapped to when it was pressed.  Need to release
+    // both shifted and non-shifted presses.
+    let row = m_vkeyPressed[vkey].row;
+    let col = m_vkeyPressed[vkey].col;
+    m_vkeyPressed[vkey].row = -1;
+    m_vkeyPressed[vkey].col = -1;
+    if (row >= 0) BeebKeyUp(row, col);
+
+    row = m_vkeyPressed[vkey].rowShift;
+    col = m_vkeyPressed[vkey].colShift;
+    m_vkeyPressed[vkey].rowShift = -1;
+    m_vkeyPressed[vkey].colShift = -1;
+    if (row >= 0) BeebKeyUp(row, col);
+  } // New key press - convert to beeb row + col
+  else {
+    const keyMapping = transTable[vkey][m_ShiftPressed ? 1 : 0];
+    const row = keyMapping.row;
+    const col = keyMapping.col;
+    const needShift = keyMapping.shift;
+    // if (m_KeyMapAS)
+    // {
+    // 	// Map A & S to CAPS & CTRL - good for some games
+    // 	if (vkey == 65)
+    // 	{
+    // 		row = 4;
+    // 		col = 0;
+    // 	}
+    // 	else if (vkey == 83)
+    // 	{
+    // 		row = 0;
+    // 		col = 1;
+    // 	}
+    // }
+    // 	if (m_KeyMapFunc)
+    // 	{
+    // 		// Map F1-F10 to f0-f9
+    // 		if (vkey >= 113 && vkey <= 121)
+    // 		{
+    // 			row = (*transTable)[vkey - 1][0].row;
+    // 			col = (*transTable)[vkey - 1][0].col;
+    // 		}
+    // 		else if (vkey == 112)
+    // 		{
+    // 			row = 2;
+    // 			col = 0;
+    // 		}
+    // 	}
+    if (row >= 0) {
+      // Make sure shift state is correct
+      if (needShift) BeebKeyDown(0, 0);
+      else BeebKeyUp(0, 0);
+
+      BeebKeyDown(row, col);
+      // Record beeb row + col for key release
+      if (m_ShiftPressed) {
+        m_vkeyPressed[vkey].rowShift = row;
+        m_vkeyPressed[vkey].colShift = col;
+      } else {
+        m_vkeyPressed[vkey].row = row;
+        m_vkeyPressed[vkey].col = col;
+      }
+    } else {
+      // Special key!  Record so key up returns correct codes
+      m_vkeyPressed[vkey].rowShift = row;
+      m_vkeyPressed[vkey].colShift = col;
+    }
+  }
 }
 
 /****************************************************************************/
@@ -210,4 +314,19 @@ function UpdateTiming(): { UpdateScreen: boolean; sleepTime?: number } {
   m_LastTotalCycles = TotalCycles;
 
   return { UpdateScreen, sleepTime };
+}
+
+/****************************************************************************/
+function ReadKeyMap(rawKeymap: number[][]): KeyMap {
+  const keymap = Array.from({ length: 256 }, () => [] as KeyMapping[]);
+
+  for (let i = 0; i < 256; ++i) {
+    // int shift0 = 0, shift1 = 0;
+    const [row0, col0, shift0, row1, col1, shift1] = rawKeymap[i];
+
+    keymap[i][0] = { row: row0, col: col0, shift: shift0 != 0 };
+    keymap[i][1] = { row: row1, col: col1, shift: shift1 != 0 };
+  }
+
+  return keymap;
 }

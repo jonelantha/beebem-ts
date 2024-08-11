@@ -511,13 +511,13 @@ function BPLInstrHandler() {
   } else ProgramCounter++;
 }
 
-// INLINE static void BRKInstrHandler(void) {
-//   PushWord(ProgramCounter+1);
-//   SetPSR(FlagB,0,0,0,0,1,0,0); /* Set B before pushing */
-//   Push(PSR);
-//   SetPSR(FlagI,0,0,1,0,0,0,0); /* Set I after pushing - see Birnbaum */
-//   ProgramCounter=BeebReadMem(0xfffe) | (BeebReadMem(0xffff)<<8);
-// } /* BRKInstrHandler */
+function BRKInstrHandler() {
+  PushWord(ProgramCounter + 1);
+  SetPSR(FlagB, 0, 0, 0, 0, 1, 0, 0); /* Set B before pushing */
+  Push(PSR);
+  SetPSR(FlagI, 0, 0, 1, 0, 0, 0, 0); /* Set I after pushing - see Birnbaum */
+  ProgramCounter = BeebReadMem(0xfffe) | (BeebReadMem(0xffff) << 8);
+} /* BRKInstrHandler */
 
 function BVCInstrHandler() {
   if (!GETVFLAG()) {
@@ -548,7 +548,7 @@ function CMPInstrHandler(operand: number) {
  * @param operand int
  */
 function CPXInstrHandler(operand: number) {
-  let result = intToUnsignedChar(XReg - operand);
+  const result = charToUnsignedChar(XReg - operand);
   SetPSRCZN(
     XReg >= operand ? 1 : 0,
     XReg == operand ? 1 : 0,
@@ -560,7 +560,7 @@ function CPXInstrHandler(operand: number) {
  * @param operand int
  */
 function CPYInstrHandler(operand: number) {
-  const result = intToUnsignedChar(YReg - operand);
+  const result = charToUnsignedChar(YReg - operand);
   SetPSRCZN(
     YReg >= operand ? 1 : 0,
     YReg == operand ? 1 : 0,
@@ -1115,10 +1115,10 @@ export function Exec6502Instruction() {
     tempInstCount++;
 
     switch (CurrentInstruction) {
-      // 		case 0x00:
-      // 			// BRK
-      // 			BRKInstrHandler();
-      // 			break;
+      case 0x00:
+        // BRK
+        BRKInstrHandler();
+        break;
       // 		case 0x01:
       // 			// ORA (zp,X)
       // 			ORAInstrHandler(IndXAddrModeHandler_Data());
@@ -1145,10 +1145,10 @@ export function Exec6502Instruction() {
         // ORA zp
         ORAInstrHandler(BeebReadMem(ZeroPgAddrModeHandler_Address()));
         break;
-      // 		case 0x06:
-      // 			// ASL zp
-      // 			ASLInstrHandler(ZeroPgAddrModeHandler_Address());
-      // 			break;
+      case 0x06:
+        // ASL zp
+        ASLInstrHandler(ZeroPgAddrModeHandler_Address());
+        break;
       // 		case 0x07: {
       // 				// Undocumented instruction: SLO zp
       // 				int ZeroPageAddress = ZeroPgAddrModeHandler_Address();
@@ -1183,10 +1183,10 @@ export function Exec6502Instruction() {
         // ORA abs
         ORAInstrHandler(AbsAddrModeHandler_Data());
         break;
-      // 		case 0x0e:
-      // 			// ASL abs
-      // 			ASLInstrHandler(AbsAddrModeHandler_Address());
-      // 			break;
+      case 0x0e:
+        // ASL abs
+        ASLInstrHandler(AbsAddrModeHandler_Address());
+        break;
       // 		case 0x0f: {
       // 				// Undocumented instruction: SLO abs
       // 				int Address = AbsAddrModeHandler_Address();
@@ -1334,10 +1334,10 @@ export function Exec6502Instruction() {
         // AND abs
         ANDInstrHandler(AbsAddrModeHandler_Data());
         break;
-      // 		case 0x2e:
-      // 			// ROL abs
-      // 			ROLInstrHandler(AbsAddrModeHandler_Address());
-      // 			break;
+      case 0x2e:
+        // ROL abs
+        ROLInstrHandler(AbsAddrModeHandler_Address());
+        break;
       // 		case 0x2f: {
       // 				// Undocumented instruction: RLA abs
       // 				int Address = AbsAddrModeHandler_Address();
@@ -1496,10 +1496,10 @@ export function Exec6502Instruction() {
         // BVC rel
         BVCInstrHandler();
         break;
-      // 		case 0x51:
-      // 			// EOR (zp),Y
-      // 			EORInstrHandler(IndYAddrModeHandler_Data());
-      // 			break;
+      case 0x51:
+        // EOR (zp),Y
+        EORInstrHandler(IndYAddrModeHandler_Data());
+        break;
       // 		case 0x52:
       // 			// Undocumented instruction: KIL
       // 			KILInstrHandler();
@@ -1539,10 +1539,10 @@ export function Exec6502Instruction() {
         }
         PSR &= 255 - FlagI;
         break;
-      // 		case 0x59:
-      // 			// EOR abs,Y
-      // 			EORInstrHandler(AbsYAddrModeHandler_Data());
-      // 			break;
+      case 0x59:
+        // EOR abs,Y
+        EORInstrHandler(AbsYAddrModeHandler_Data());
+        break;
       // 		case 0x5a:
 
       // 			// Undocumented instruction: NOP
@@ -2040,10 +2040,10 @@ export function Exec6502Instruction() {
       // 				CMPInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0xc4:
-      // 			// CPY zp
-      // 			CPYInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
-      // 			break;
+      case 0xc4:
+        // CPY zp
+        CPYInstrHandler(BEEBREADMEM_DIRECT(ReadPaged(ProgramCounter++)));
+        break;
       case 0xc5:
         // CMP zp
         CMPInstrHandler(BEEBREADMEM_DIRECT(ReadPaged(ProgramCounter++)));
@@ -2083,10 +2083,10 @@ export function Exec6502Instruction() {
       // 				XReg = Result;
       // 			}
       // 			break;
-      // 		case 0xcc:
-      // 			// CPY abs
-      // 			CPYInstrHandler(AbsAddrModeHandler_Data());
-      // 			break;
+      case 0xcc:
+        // CPY abs
+        CPYInstrHandler(AbsAddrModeHandler_Data());
+        break;
       case 0xcd:
         // CMP abs
         CMPInstrHandler(AbsAddrModeHandler_Data());
@@ -2189,14 +2189,14 @@ export function Exec6502Instruction() {
       // 				SBCInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0xe4:
-      // 			// CPX zp
-      // 			CPXInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
-      // 			break;
-      // 		case 0xe5:
-      // 			// SBC zp
-      // 			SBCInstrHandler(WholeRam[ReadPaged(ProgramCounter++)]);
-      // 			break;
+      case 0xe4:
+        // CPX zp
+        CPXInstrHandler(BeebReadMem(ReadPaged(ProgramCounter++)));
+        break;
+      case 0xe5:
+        // SBC zp
+        SBCInstrHandler(BeebReadMem(ReadPaged(ProgramCounter++)));
+        break;
       case 0xe6:
         // INC zp
         INCInstrHandler(ZeroPgAddrModeHandler_Address());

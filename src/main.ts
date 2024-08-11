@@ -21,8 +21,9 @@ Boston, MA  02110-1301, USA.
 ****************************************************************/
 
 import { tempVideoOverride } from "./video";
-import { Initialise } from "./beebwin";
+import { Initialise, TranslateKey } from "./beebwin";
 import { Exec6502Instruction } from "./6502core";
+import { BeebReleaseAllKeys } from "./sysvia";
 
 import "./style.css";
 
@@ -62,6 +63,18 @@ const memFile = params.get("mem");
 if (!memFile) throw "no mem param";
 
 (async function run() {
+  document.addEventListener("keydown", evt => {
+    evt.preventDefault();
+    TranslateKey(evt.keyCode, false);
+  });
+  document.addEventListener("keyup", evt => {
+    evt.preventDefault();
+    TranslateKey(evt.keyCode, true);
+  });
+  window.addEventListener("blur", () => {
+    BeebReleaseAllKeys();
+  });
+
   await Initialise();
 
   const start = performance.now();
