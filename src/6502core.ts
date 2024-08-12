@@ -67,12 +67,12 @@ const charToSignedChar = (char: number) => (char & 0x80 ? char - 0x100 : char);
 // };
 const charToUnsignedChar = (val: number) => {
   if (val > 0xff || val < -0xff) throw `out of range ${val.toString(16)}`;
-  return val >= 0 ? val : val + 0xff;
+  return val >= 0 ? val : val + 0x100;
 };
 
 // main
 
-let tempInstCount = 0;
+let tempInstCount = -1;
 export const getInstCount = () => tempInstCount;
 
 let CurrentInstruction = -1;
@@ -195,6 +195,10 @@ function GETTWOBYTEFROMPC() {
 
 const WritePaged = BeebWriteMem;
 const ReadPaged = BeebReadMem;
+
+function shouldTrace() {
+  return 370 <= tempInstCount && tempInstCount <= 400;
+}
 
 /*----------------------------------------------------------------------------*/
 
@@ -390,7 +394,7 @@ function ADCInstrHandler(operand: number) {
       Accumulator & 128 ? 128 : 0,
     );
   } else {
-    throw "not impl 2";
+    throw "not impl";
     /* Z flag determined from 2's compl result, not BCD result! */
     // int TmpResult = Accumulator + operand + GETCFLAG;
     // int ZFlag = (TmpResult & 0xff) == 0;
@@ -538,7 +542,7 @@ function BVSInstrHandler() {
  */
 function CMPInstrHandler(operand: number) {
   /* NOTE! Should we consult D flag ? */
-  const result = Accumulator - operand;
+  const result = charToUnsignedChar(Accumulator - operand);
   let CFlag: 0 | 1 = 0;
   if (Accumulator >= operand) CFlag = FlagC;
   SetPSRCZN(CFlag, Accumulator == operand ? 1 : 0, result & 128 ? 128 : 0);
@@ -758,6 +762,7 @@ function SBCInstrHandler(operand: number) {
       Accumulator & 128 ? 128 : 0,
     );
   } else {
+    throw "not impl";
     /* Z flag determined from 2's compl result, not BCD result! */
     // int TmpResult = Accumulator - operand - (1 - GETCFLAG);
     // int ZFlag = ((TmpResult & 0xff) == 0);
@@ -1103,15 +1108,15 @@ export function Exec6502Instruction() {
     ViaCycles = 0;
     AdvanceCyclesForMemRead();
 
-    // if (165040 < tempInstCount && tempInstCount <= 165050) {
-    //   console.log(
-    //     tempInstCount,
-    //     ProgramCounter.toString(16),
-    //     CurrentInstruction.toString(16),
-    //   );
-    // }
+    if (shouldTrace()) {
+      console.log(
+        tempInstCount,
+        ProgramCounter.toString(16),
+        CurrentInstruction.toString(16),
+      );
+    }
 
-    tempInstCount++;
+    if (tempInstCount !== -1) tempInstCount++;
 
     switch (CurrentInstruction) {
       case 0x00:
@@ -1197,10 +1202,10 @@ export function Exec6502Instruction() {
         // BPL rel
         BPLInstrHandler();
         break;
-      // 		case 0x11:
-      // 			// ORA (zp),Y
-      // 			ORAInstrHandler(IndYAddrModeHandler_Data());
-      // 			break;
+      case 0x11:
+        // ORA (zp),Y
+        ORAInstrHandler(IndYAddrModeHandler_Data());
+        break;
       // 		case 0x12:
       // 			// Undocumented instruction: KIL
       // 			KILInstrHandler();
@@ -1235,10 +1240,10 @@ export function Exec6502Instruction() {
         // CLC
         PSR &= 255 - FlagC;
         break;
-      // 		case 0x19:
-      // 			// ORA abs,Y
-      // 			ORAInstrHandler(AbsYAddrModeHandler_Data());
-      // 			break;
+      case 0x19:
+        // ORA abs,Y
+        ORAInstrHandler(AbsYAddrModeHandler_Data());
+        break;
       case 0x1a:
         // Undocumented instruction: NOP
         break;
@@ -1821,11 +1826,11 @@ export function Exec6502Instruction() {
       // 				WritePaged(Address, Accumulator & XReg & ((Address >> 8) + 1));
       // 			}
       // 			break;
-      // 		case 0x94:
-      // 			// STY zp,X
-      // 			AdvanceCyclesForMemWrite();
-      // 			STYInstrHandler(ZeroPgXAddrModeHandler_Address());
-      // 			break;
+      case 0x94:
+        // STY zp,X
+        AdvanceCyclesForMemWrite();
+        STYInstrHandler(ZeroPgXAddrModeHandler_Address());
+        break;
       case 0x95:
         // STA zp,X
         AdvanceCyclesForMemWrite();
@@ -2264,10 +2269,10 @@ export function Exec6502Instruction() {
       // 			// SBC zp,X
       // 			SBCInstrHandler(ZeroPgXAddrModeHandler_Data());
       // 			break;
-      // 		case 0xf6:
-      // 			// INC zp,X
-      // 			INCInstrHandler(ZeroPgXAddrModeHandler_Address());
-      // 			break;
+      case 0xf6:
+        // INC zp,X
+        INCInstrHandler(ZeroPgXAddrModeHandler_Address());
+        break;
       // 		case 0xf7: {
       // 				// Undocumented instruction: ISC zp,X
       // 				int ZeroPageAddress = ZeroPgXAddrModeHandler_Address();
