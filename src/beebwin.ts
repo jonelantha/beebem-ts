@@ -35,7 +35,7 @@ import { BeebMemInit } from "./beebmem";
 import { bufferHeight, bufferWidth, InitSurfaces } from "./beebwindx";
 import { KeyMap, KeyMapping, REAL_TIME_TARGET } from "./beebwinh";
 import { Disc8271Reset } from "./disc8271";
-import { defaultKeymapData } from "./keymap";
+import { defaultKeymapData, logicalKeymapData } from "./keymap";
 import { BeebKeyDown, BeebKeyUp, SysVIAReset } from "./sysvia";
 import { UserVIAReset } from "./uservia";
 import { BuildMode7Font, VideoInit } from "./video";
@@ -66,7 +66,7 @@ const m_vkeyPressed = Array.from({ length: 256 }, () => ({
 
 // Keyboard mappings
 let defaultMapping: KeyMap;
-//let KeyMap logicalMapping;
+let logicalMapping: KeyMap;
 
 /* Currently selected translation table */
 let transTable: KeyMap;
@@ -86,7 +86,8 @@ export async function Initialise() {
 /****************************************************************************/
 async function ApplyPrefs() {
   defaultMapping = ReadKeyMap(defaultKeymapData);
-  transTable = defaultMapping;
+  logicalMapping = ReadKeyMap(logicalKeymapData);
+  transTable = logicalMapping;
 
   InitSurfaces();
 
