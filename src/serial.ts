@@ -32,6 +32,10 @@ Boston, MA  02110-1301, USA.
 import { SetTrigger } from "./6502core";
 import { CycleCountTMax } from "./port";
 
+export const AdjustTriggerTape = (max: number, wrap: number) => {
+  if (TapeTrigger != max) TapeTrigger -= wrap;
+};
+
 // MC6850 status register bits
 const MC6850_STATUS_RDRF = 0x01;
 const MC6850_STATUS_TDRE = 0x02;

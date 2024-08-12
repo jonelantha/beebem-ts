@@ -33,6 +33,10 @@ import { ClearTrigger, getTotalCycles } from "./6502core";
 export const Disc8271Poll = () =>
   Disc8271Trigger <= getTotalCycles() && Disc8271_poll_real();
 
+export const AdjustTriggerDisc8271 = (max: number, wrap: number) => {
+  if (Disc8271Trigger != max) Disc8271Trigger -= wrap;
+};
+
 // main
 
 // #define ENABLE_LOG 0

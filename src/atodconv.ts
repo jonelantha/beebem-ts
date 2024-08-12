@@ -29,6 +29,10 @@ import { PulseSysViaCB1 } from "./sysvia";
 export const AtoD_poll = (_ncycles: number) =>
   AtoDTrigger <= getTotalCycles() && AtoD_poll_real();
 
+export const AdjustTriggerAtoD = (max: number, wrap: number) => {
+  if (AtoDTrigger != max) AtoDTrigger -= wrap;
+};
+
 // main
 
 /* A to D state */

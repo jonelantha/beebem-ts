@@ -20,19 +20,19 @@ Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 Boston, MA  02110-1301, USA.
 ****************************************************************/
 
-import { AtoD_poll } from "./atodconv";
+import { AdjustTriggerAtoD, AtoD_poll } from "./atodconv";
 import {
   BeebReadMem,
   BEEBREADMEM_DIRECT,
   BeebWriteMem,
   BEEBWRITEMEM_DIRECT,
 } from "./beebmem";
-import { Disc8271Poll } from "./disc8271";
+import { AdjustTriggerDisc8271, Disc8271Poll } from "./disc8271";
 import { CycleCountTMax, CycleCountWrap } from "./port";
-import { SerialPoll } from "./serial";
+import { AdjustTriggerTape, SerialPoll } from "./serial";
 import { SysVIA_poll } from "./sysvia";
 import { UserVIA_poll } from "./uservia";
-import { VideoPoll } from "./video";
+import { AdjustTriggerVideo, VideoPoll } from "./video";
 
 // header
 
@@ -2385,12 +2385,11 @@ function PollHardware(nCycles: number) {
 
   if (TotalCycles > CycleCountWrap) {
     TotalCycles -= CycleCountWrap;
-    throw "not impl";
-    //     AdjustTrigger(AtoDTrigger);
-    //     AdjustTrigger(SoundTrigger);
-    //     AdjustTrigger(Disc8271Trigger);
-    //     AdjustTrigger(VideoTriggerCount);
-    //     AdjustTrigger(TapeTrigger);
+    AdjustTriggerAtoD(CycleCountTMax, CycleCountWrap);
+    //AdjustTrigger(SoundTrigger);
+    AdjustTriggerDisc8271(CycleCountTMax, CycleCountWrap);
+    AdjustTriggerVideo(CycleCountTMax, CycleCountWrap);
+    AdjustTriggerTape(CycleCountTMax, CycleCountWrap);
   }
 
   const sleepTime = VideoPoll(nCycles);

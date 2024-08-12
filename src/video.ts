@@ -23,11 +23,7 @@ Boston, MA  02110-1301, USA.
 ****************************************************************/
 
 import { getTotalCycles, IncTrigger, SetTrigger } from "./6502core";
-import {
-  BeebMemPtrWithWrap,
-  BeebMemPtrWithWrapMode7,
-  getWholeRam,
-} from "./beebmem";
+import { BeebMemPtrWithWrap, BeebMemPtrWithWrapMode7 } from "./beebmem";
 import { getScreen, StartOfFrame } from "./beebwin";
 import { bufferWidth, updateLines } from "./beebwindx";
 import {
@@ -45,6 +41,10 @@ import { SysVIATriggerCA1Int } from "./sysvia";
 
 export const VideoPoll = (_ncycles: number) =>
   VideoTriggerCount <= getTotalCycles() ? VideoDoScanLine() : undefined;
+
+export const AdjustTriggerVideo = (max: number, wrap: number) => {
+  if (VideoTriggerCount != max) VideoTriggerCount -= wrap;
+};
 
 export const MAX_VIDEO_SCAN_LINES = 312;
 
