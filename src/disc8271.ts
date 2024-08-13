@@ -26,7 +26,14 @@ Boston, MA  02110-1301, USA.
 // #define DISC_ENABLED true
 // #define DISC_SOUND_ENABLED true
 
-import { ClearTrigger, getTotalCycles } from "./6502core";
+import {
+  ClearNMIStatus,
+  ClearTrigger,
+  getTotalCycles,
+  nmi_floppy,
+  SetNMIStatus,
+  SetTrigger,
+} from "./6502core";
 
 // header
 
@@ -50,7 +57,7 @@ const STATUS_REG_INTERRUPT_REQUEST = 0x08;
 // const unsigned char STATUS_REG_NON_DMA_MODE       = 0x04;
 
 // 8271 Result register
-// const unsigned char RESULT_REG_SUCCESS            = 0x00;
+const RESULT_REG_SUCCESS = 0x00;
 // const unsigned char RESULT_REG_SCAN_NOT_MET       = 0x00;
 // const unsigned char RESULT_REG_SCAN_MET_EQUAL     = 0x02;
 // const unsigned char RESULT_REG_SCAN_MET_NOT_EQUAL = 0x04;
@@ -58,12 +65,12 @@ const STATUS_REG_INTERRUPT_REQUEST = 0x08;
 // const unsigned char RESULT_REG_LATE_DMA           = 0x0A;
 // const unsigned char RESULT_REG_ID_CRC_ERROR       = 0x0C;
 // const unsigned char RESULT_REG_DATA_CRC_ERROR     = 0x0E;
-// const unsigned char RESULT_REG_DRIVE_NOT_READY    = 0x10;
+const RESULT_REG_DRIVE_NOT_READY = 0x10;
 // const unsigned char RESULT_REG_WRITE_PROTECT      = 0x12;
 // const unsigned char RESULT_REG_TRACK_0_NOT_FOUND  = 0x14;
 // const unsigned char RESULT_REG_WRITE_FAULT        = 0x16;
 // const unsigned char RESULT_REG_SECTOR_NOT_FOUND   = 0x18;
-// const unsigned char RESULT_REG_DRIVE_NOT_PRESENT  = 0x1E; // Undocumented, see http://beebwiki.mdfs.net/OSWORD_%267F
+const RESULT_REG_DRIVE_NOT_PRESENT = 0x1e; // Undocumented, see http://beebwiki.mdfs.net/OSWORD_%267F
 // const unsigned char RESULT_REG_DELETED_DATA_FOUND = 0x20;
 
 // 8271 special registers
@@ -81,10 +88,10 @@ const SPECIAL_REG_SURFACE_1_BAD_TRACK_1 = 0x18;
 const SPECIAL_REG_SURFACE_1_BAD_TRACK_2 = 0x19;
 
 let Disc8271Trigger = 0; /* int Cycle based time Disc8271Trigger */
-// static unsigned char ResultReg;
+let ResultReg = 0;
 let StatusReg = 0; // unsigned char
 // static unsigned char DataReg;
-// static unsigned char Internal_Scan_SectorNum;
+let Internal_Scan_SectorNum = 0;
 // static unsigned int Internal_Scan_Count; /* Read as two bytes */
 let Internal_ModeReg = 0;
 const Internal_CurrentTrack = [0, 0]; /* unsigned char 0/1 for surface number */
@@ -113,42 +120,56 @@ const Params = Array.from({ length: 16 }, () => 0);
 // These bools indicate which drives the last command selected.
 // They also act as "drive ready" bits which are reset when the motor stops.
 const Selects = [false, false]; /* Drive selects */
-// static bool Writeable[2]={false,false}; /* True if the drives are writeable */
+const Writeable = [false, false]; /* True if the drives are writeable */
 
 // static bool FirstWriteInt; // Indicates the start of a write operation
 
-// static unsigned char NextInterruptIsErr; // non-zero causes error and drops this value into result reg
+let NextInterruptIsErr = 0; // non-zero causes error and drops this value into result reg
 
-// #define TRACKSPERDRIVE 80
+const TRACKSPERDRIVE = 80;
 
 // /* Note Head select is done from bit 5 of the drive output register */
-// #define CURRENTHEAD ((Internal_DriveControlOutputPort>>5) & 1)
+const CURRENTHEAD = () => (Internal_DriveControlOutputPort >> 5) & 1;
 
 // /* Note: reads/writes one byte every 80us */
-// #define TIMEBETWEENBYTES (160)
+const TIMEBETWEENBYTES = 160;
 
-// struct SectorType {
+type IDField_Type = {
+  CylinderNum: number; // :7;
+  RecordNum: number; // 5;
+  HeadNum: number; //1;
+  PhysRecLength: number;
+};
 
-//   struct IDFieldType {
-//     unsigned int CylinderNum:7;
-//     unsigned int RecordNum:5;
-//     unsigned int HeadNum:1;
-//     unsigned int PhysRecLength;
-//   } IDField;
+type SectorType = {
+  IDField: IDField_Type;
 
-//   bool Deleted; // If true the sector is deleted
-//   unsigned char *Data;
-// };
+  Deleted: boolean; // If true the sector is deleted
+  Data: Uint8Array;
+};
 
-// struct TrackType {
-//   int LogicalSectors; /* Number of sectors stated in format command */
-//   int NSectors; /* i.e. the number of records we have - not anything physical */
-//   SectorType *Sectors;
-//   int Gap1Size,Gap3Size,Gap5Size; /* From format command */
-// };
+type TrackType = {
+  LogicalSectors: number /* Number of sectors stated in format command */;
+  NSectors: number /* i.e. the number of records we have - not anything physical */;
+  Sectors: SectorType[];
+  Gap1Size: number;
+  Gap3Size: number;
+  Gap5Size: number /* From format command */;
+};
 
 /* All data on the disc - first param is drive number, then head. then physical track id */
-//TrackType DiscStore[2][2][TRACKSPERDRIVE];
+const DiscStore: TrackType[][][] = Array.from({ length: 2 }, () =>
+  Array.from({ length: 2 }, () =>
+    Array.from({ length: TRACKSPERDRIVE }, () => ({
+      LogicalSectors: 0,
+      NSectors: 0,
+      Sectors: [],
+      Gap1Size: 0,
+      Gap3Size: 0,
+      Gap5Size: 0,
+    })),
+  ),
+);
 
 /* File names of loaded disc images */
 //static char FileNames[2][256];
@@ -163,27 +184,40 @@ const Selects = [false, false]; /* Drive selects */
 
 function UPDATENMISTATUS() {
   if (StatusReg & STATUS_REG_INTERRUPT_REQUEST) {
-    //NMIStatus |= 1 << nmi_floppy;
+    SetNMIStatus(1 << nmi_floppy);
   } else {
-    //NMIStatus &= ~(1 << nmi_floppy);
+    ClearNMIStatus(1 << nmi_floppy);
   }
 }
 
 /*--------------------------------------------------------------------------*/
 
-// struct CommandStatusType {
-//   int TrackAddr;
-//   int CurrentSector;
-//   int SectorLength; /* In bytes */
-//   int SectorsToGo;
+type CommandStatusType = {
+  TrackAddr: number;
+  CurrentSector: number;
+  SectorLength: number /* In bytes */;
+  SectorsToGo: number;
 
-//   SectorType *CurrentSectorPtr;
-//   TrackType *CurrentTrackPtr;
+  CurrentSectorPtr: SectorType | undefined;
+  CurrentTrackPtr: TrackType | undefined;
 
-//   int ByteWithinSector; /* Next byte in sector or ID field */
-// };
+  ByteWithinSector: number /* Next byte in sector or ID field */;
+};
 
-// static CommandStatusType CommandStatus;
+let CommandStatus: CommandStatusType = {
+  TrackAddr: 0,
+  CurrentSector: 0,
+  SectorLength: 0 /* In bytes */,
+  SectorsToGo: 0,
+
+  CurrentTrackPtr: undefined,
+  CurrentSectorPtr: undefined,
+
+  // SectorType *CurrentSectorPtr;
+  // TrackType *CurrentTrackPtr;
+
+  ByteWithinSector: 0 /* Next byte in sector or ID field */,
+};
 
 /*--------------------------------------------------------------------------*/
 
@@ -210,52 +244,54 @@ function DoSelects() {
 }
 
 /*--------------------------------------------------------------------------*/
-// static void NotImp(const char *NotImpCom) {
-//   mainWin->Report(MessageType::Error,
-//                   "Disc operation '%s' not supported", NotImpCom);
-// }
+function NotImp(NotImpCom: string) {
+  throw `Disc operation ${NotImpCom} not supported`;
+}
 
 /*--------------------------------------------------------------------------*/
 /* Load the head - ignore for the moment                                    */
-// static void DoLoadHead(void) {
-// }
+function DoLoadHead() {}
 
 /*--------------------------------------------------------------------------*/
 /* Initialise our disc structures                                           */
-// static void InitDiscStore(void) {
-//   int head,track,drive;
-//   TrackType blank={0,0,NULL,0,0,0};
-
-//   for(drive=0;drive<2;drive++)
-//     for(head=0;head<2;head++)
-//       for(track=0;track<TRACKSPERDRIVE;track++)
-//         DiscStore[drive][head][track]=blank;
-// }
+function InitDiscStore() {
+  for (let drive = 0; drive < 2; drive++)
+    for (let head = 0; head < 2; head++)
+      for (let track = 0; track < TRACKSPERDRIVE; track++)
+        DiscStore[drive][head][track] = {
+          LogicalSectors: 0,
+          NSectors: 0,
+          Sectors: [],
+          Gap1Size: 0,
+          Gap3Size: 0,
+          Gap5Size: 0,
+        };
+}
 
 /*--------------------------------------------------------------------------*/
 /* Given a logical track number accounts for bad tracks                     */
-// static int SkipBadTracks(int Unit, int trackin) {
-//   int offset=0;
+function SkipBadTracks(Unit: number, trackin: number) {
+  let offset = 0;
 
-// if (Internal_BadTracks[Unit][0]<=trackin) offset++;
-// if (Internal_BadTracks[Unit][1]<=trackin) offset++;
+  if (Internal_BadTracks[Unit][0] <= trackin) offset++;
+  if (Internal_BadTracks[Unit][1] <= trackin) offset++;
 
-//   return(trackin+offset);
-// }
+  return trackin + offset;
+}
 
 /*--------------------------------------------------------------------------*/
 
-// static int GetSelectedDrive() {
-//   if (Selects[0]) {
-//     return 0;
-//   }
+function GetSelectedDrive() {
+  if (Selects[0]) {
+    return 0;
+  }
 
-//   if (Selects[1]) {
-//     return 1;
-//   }
+  if (Selects[1]) {
+    return 1;
+  }
 
-//   return -1;
-// }
+  return -1;
+}
 
 /*--------------------------------------------------------------------------*/
 /* Returns a pointer to the data structure for a particular track.  You     */
@@ -263,45 +299,50 @@ function DoSelects() {
 /* drive select and head select etc.  It always returns a valid ptr - if    */
 /* there aren't that many tracks then it uses the last one.                 */
 /* The one exception!!!! is that if no drives are selected it returns NULL  */
-// static TrackType *GetTrackPtr(int LogicalTrackID) {
-//   int Drive = GetSelectedDrive();
+function GetTrackPtr(LogicalTrackID: number): TrackType | undefined {
+  const Drive = GetSelectedDrive();
 
-//   if (Drive < 0) {
-//     return nullptr;
-//   }
+  if (Drive < 0) {
+    return undefined;
+  }
 
-//   LogicalTrackID = SkipBadTracks(Drive, LogicalTrackID);
+  LogicalTrackID = SkipBadTracks(Drive, LogicalTrackID);
 
-//   if (LogicalTrackID>=TRACKSPERDRIVE) LogicalTrackID=TRACKSPERDRIVE-1;
+  if (LogicalTrackID >= TRACKSPERDRIVE) LogicalTrackID = TRACKSPERDRIVE - 1;
 
-//   return &DiscStore[Drive][CURRENTHEAD][LogicalTrackID];
-// }
+  return DiscStore[Drive][CURRENTHEAD()][LogicalTrackID];
+}
 
 /*--------------------------------------------------------------------------*/
 /* Returns a pointer to the data structure for a particular sector. Returns */
 /* NULL for Sector not found. Doesn't check cylinder/head ID                */
-// static SectorType *GetSectorPtr(const TrackType *Track, int LogicalSectorID, bool FindDeleted) {
-//   int CurrentSector;
+function GetSectorPtr(
+  Track: TrackType,
+  LogicalSectorID: number,
+  FindDeleted: boolean,
+) {
+  if (Track.Sectors.length === 0) return undefined;
 
-//   if (Track->Sectors==NULL) return(NULL);
+  for (let CurrentSector = 0; CurrentSector < Track.NSectors; CurrentSector++)
+    if (
+      Track.Sectors[CurrentSector].IDField.RecordNum == LogicalSectorID &&
+      (!Track.Sectors[CurrentSector].Deleted || !FindDeleted)
+    )
+      return Track.Sectors[CurrentSector];
 
-//   for(CurrentSector=0;CurrentSector<Track->NSectors;CurrentSector++)
-//     if ((Track->Sectors[CurrentSector].IDField.RecordNum==LogicalSectorID) && ((!Track->Sectors[CurrentSector].Deleted) || (!FindDeleted)))
-//       return(&(Track->Sectors[CurrentSector]));
-
-//   return(NULL);
-// }
+  return undefined;
+}
 
 /*--------------------------------------------------------------------------*/
 
 // Cause an error - pass err num
 
-// static void DoErr(unsigned char ErrNum) {
-//   SetTrigger(50, Disc8271Trigger); // Give it a bit of time
-//   NextInterruptIsErr = ErrNum;
-//   StatusReg = STATUS_REG_COMMAND_BUSY; // Command is busy - come back when I have an interrupt
-//   UPDATENMISTATUS;
-// }
+function DoErr(ErrNum: number) {
+  Disc8271Trigger = SetTrigger(50); // Give it a bit of time
+  NextInterruptIsErr = ErrNum;
+  StatusReg = STATUS_REG_COMMAND_BUSY; // Command is busy - come back when I have an interrupt
+  UPDATENMISTATUS();
+}
 
 /*--------------------------------------------------------------------------*/
 
@@ -376,7 +417,7 @@ function DoSelects() {
 //     CommandStatus.ByteWithinSector=0;
 //     SetTrigger(TIMEBETWEENBYTES,Disc8271Trigger);
 //     StatusReg = STATUS_REG_COMMAND_BUSY;
-//     UPDATENMISTATUS;
+//     UPDATENMISTATUS();
 //     CommandStatus.ByteWithinSector=0;
 //     FirstWriteInt = true;
 //   } else {
@@ -390,7 +431,7 @@ function DoSelects() {
 
 //   if (CommandStatus.SectorsToGo < 0) {
 //     StatusReg = STATUS_REG_RESULT_FULL | STATUS_REG_INTERRUPT_REQUEST;
-//     UPDATENMISTATUS;
+//     UPDATENMISTATUS();
 //     return;
 //   }
 
@@ -415,7 +456,7 @@ function DoSelects() {
 //       /* Last sector done, write the track back to disc */
 //       if (SaveTrackImage(Selects[0] ? 0 : 1, CURRENTHEAD, CommandStatus.TrackAddr)) {
 //         StatusReg = STATUS_REG_RESULT_FULL;
-//         UPDATENMISTATUS;
+//         UPDATENMISTATUS();
 //         LastByte = true;
 //         CommandStatus.SectorsToGo=-1; /* To let us bail out */
 //         SetTrigger(0,Disc8271Trigger); /* To pick up result */
@@ -430,7 +471,7 @@ function DoSelects() {
 //     StatusReg = STATUS_REG_COMMAND_BUSY |
 //                 STATUS_REG_INTERRUPT_REQUEST |
 //                 STATUS_REG_NON_DMA_MODE;
-//     UPDATENMISTATUS;
+//     UPDATENMISTATUS();
 //     SetTrigger(TIMEBETWEENBYTES,Disc8271Trigger);
 //   }
 // }
@@ -454,110 +495,123 @@ function DoSelects() {
 // }
 
 /*--------------------------------------------------------------------------*/
-// static void DoVarLength_ReadDataCommand(void) {
-//   DoSelects();
-//   DoLoadHead();
+function DoVarLength_ReadDataCommand() {
+  DoSelects();
+  DoLoadHead();
 
-//   const int Drive = GetSelectedDrive();
+  const Drive = GetSelectedDrive();
 
-//   if (Drive < 0) {
-//     DoErr(RESULT_REG_DRIVE_NOT_READY);
-//     return;
-//   }
+  if (Drive < 0) {
+    DoErr(RESULT_REG_DRIVE_NOT_READY);
+    return;
+  }
 
-//   // Reset shift state if it was set by Run Disc
-//   if (mainWin->m_ShiftBooted) {
-//     mainWin->m_ShiftBooted = false;
-//     BeebKeyUp(0, 0);
-//   }
+  // Reset shift state if it was set by Run Disc
+  // if (mainWin->m_ShiftBooted) {
+  //   mainWin->m_ShiftBooted = false;
+  //   BeebKeyUp(0, 0);
+  // }
 
-//   Internal_CurrentTrack[Drive]=Params[0];
-//   CommandStatus.CurrentTrackPtr=GetTrackPtr(Params[0]);
-//   if (CommandStatus.CurrentTrackPtr==NULL) {
-//     DoErr(RESULT_REG_DRIVE_NOT_READY);
-//     return;
-//   }
+  Internal_CurrentTrack[Drive] = Params[0];
+  CommandStatus.CurrentTrackPtr = GetTrackPtr(Params[0]);
+  if (CommandStatus.CurrentTrackPtr === undefined) {
+    DoErr(RESULT_REG_DRIVE_NOT_READY);
+    return;
+  }
 
-//   CommandStatus.CurrentSectorPtr = GetSectorPtr(CommandStatus.CurrentTrackPtr, Params[1], false);
-//   if (CommandStatus.CurrentSectorPtr==NULL) {
-//     DoErr(RESULT_REG_DRIVE_NOT_PRESENT);
-//     return;
-//   }
+  CommandStatus.CurrentSectorPtr = GetSectorPtr(
+    CommandStatus.CurrentTrackPtr,
+    Params[1],
+    false,
+  );
+  if (CommandStatus.CurrentSectorPtr === undefined) {
+    DoErr(RESULT_REG_DRIVE_NOT_PRESENT);
+    return;
+  }
+  throw "not impl";
 
-//   CommandStatus.TrackAddr=Params[0];
-//   CommandStatus.CurrentSector=Params[1];
-//   CommandStatus.SectorsToGo=Params[2] & 31;
-//   CommandStatus.SectorLength=1<<(7+((Params[2] >> 5) & 7));
+  // CommandStatus.TrackAddr = Params[0];
+  // CommandStatus.CurrentSector = Params[1];
+  // CommandStatus.SectorsToGo = Params[2] & 31;
+  // CommandStatus.SectorLength = 1 << (7 + ((Params[2] >> 5) & 7));
 
-//   if (ValidateSector(CommandStatus.CurrentSectorPtr,CommandStatus.TrackAddr,CommandStatus.SectorLength)) {
-//     CommandStatus.ByteWithinSector=0;
-//     SetTrigger(TIMEBETWEENBYTES,Disc8271Trigger);
-//     StatusReg = STATUS_REG_COMMAND_BUSY;
-//     UPDATENMISTATUS;
-//   } else {
-//     DoErr(RESULT_REG_DRIVE_NOT_PRESENT);
-//   }
-// }
-
-/*--------------------------------------------------------------------------*/
-// static void ReadInterrupt(void) {
-//   bool LastByte = false;
-
-//   if (CommandStatus.SectorsToGo < 0) {
-//     StatusReg = STATUS_REG_RESULT_FULL | STATUS_REG_INTERRUPT_REQUEST;
-//     UPDATENMISTATUS;
-//     return;
-//   }
-
-//   DataReg=CommandStatus.CurrentSectorPtr->Data[CommandStatus.ByteWithinSector++];
-
-//   #if ENABLE_LOG
-//   WriteLog("ReadInterrupt called - DataReg=0x%02X ByteWithinSector=%d\n", DataReg, CommandStatus.ByteWithinSector);
-//   #endif
-
-//   ResultReg=0;
-//   if (CommandStatus.ByteWithinSector>=CommandStatus.SectorLength) {
-//     CommandStatus.ByteWithinSector=0;
-//     /* I don't know if this can cause the thing to step - I presume not for the moment */
-//     if (--CommandStatus.SectorsToGo) {
-//       CommandStatus.CurrentSector++;
-//       CommandStatus.CurrentSectorPtr = GetSectorPtr(CommandStatus.CurrentTrackPtr,
-//                                                     CommandStatus.CurrentSector,
-//                                                     false);
-//       if (CommandStatus.CurrentSectorPtr == NULL) {
-//         DoErr(RESULT_REG_DRIVE_NOT_PRESENT); // Sector not found
-//         return;
-//       }
-//     } else {
-//       /* Last sector done */
-//       StatusReg = STATUS_REG_COMMAND_BUSY |
-//                   STATUS_REG_RESULT_FULL |
-//                   STATUS_REG_INTERRUPT_REQUEST |
-//                   STATUS_REG_NON_DMA_MODE;
-//       UPDATENMISTATUS;
-//       LastByte = true;
-//       CommandStatus.SectorsToGo=-1; /* To let us bail out */
-//       SetTrigger(TIMEBETWEENBYTES,Disc8271Trigger); /* To pick up result */
-//     }
-//   }
-
-//   if (!LastByte) {
-//     StatusReg = STATUS_REG_COMMAND_BUSY |
-//                 STATUS_REG_INTERRUPT_REQUEST |
-//                 STATUS_REG_NON_DMA_MODE;
-//     UPDATENMISTATUS;
-//     SetTrigger(TIMEBETWEENBYTES,Disc8271Trigger);
-//   }
-// }
+  // if (
+  //   ValidateSector(
+  //     CommandStatus.CurrentSectorPtr,
+  //     CommandStatus.TrackAddr,
+  //     CommandStatus.SectorLength,
+  //   )
+  // ) {
+  //   CommandStatus.ByteWithinSector = 0;
+  //   Disc8271Trigger = SetTrigger(TIMEBETWEENBYTES);
+  //   StatusReg = STATUS_REG_COMMAND_BUSY;
+  //   UPDATENMISTATUS();
+  // } else {
+  //   DoErr(RESULT_REG_DRIVE_NOT_PRESENT);
+  // }
+}
 
 /*--------------------------------------------------------------------------*/
-// static void Do128ByteSR_ReadDataAndDeldCommand(void) {
-//   DoSelects();
-//   NotImp("Do128ByteSR_ReadDataAndDeldCommand");
-// }
+function ReadInterrupt() {
+  let LastByte = false;
+
+  if (CommandStatus.SectorsToGo < 0) {
+    StatusReg = STATUS_REG_RESULT_FULL | STATUS_REG_INTERRUPT_REQUEST;
+    UPDATENMISTATUS();
+    return;
+  }
+
+  throw "not impl";
+
+  // DataReg=CommandStatus.CurrentSectorPtr->Data[CommandStatus.ByteWithinSector++];
+
+  // #if ENABLE_LOG
+  // WriteLog("ReadInterrupt called - DataReg=0x%02X ByteWithinSector=%d\n", DataReg, CommandStatus.ByteWithinSector);
+  // #endif
+
+  // ResultReg=0;
+  // if (CommandStatus.ByteWithinSector>=CommandStatus.SectorLength) {
+  //   CommandStatus.ByteWithinSector=0;
+  //   /* I don't know if this can cause the thing to step - I presume not for the moment */
+  //   if (--CommandStatus.SectorsToGo) {
+  //     CommandStatus.CurrentSector++;
+  //     CommandStatus.CurrentSectorPtr = GetSectorPtr(CommandStatus.CurrentTrackPtr,
+  //                                                   CommandStatus.CurrentSector,
+  //                                                   false);
+  //     if (CommandStatus.CurrentSectorPtr == NULL) {
+  //       DoErr(RESULT_REG_DRIVE_NOT_PRESENT); // Sector not found
+  //       return;
+  //     }
+  //   } else {
+  //     /* Last sector done */
+  //     StatusReg = STATUS_REG_COMMAND_BUSY |
+  //                 STATUS_REG_RESULT_FULL |
+  //                 STATUS_REG_INTERRUPT_REQUEST |
+  //                 STATUS_REG_NON_DMA_MODE;
+  //     UPDATENMISTATUS();
+  //     LastByte = true;
+  //     CommandStatus.SectorsToGo=-1; /* To let us bail out */
+  //     SetTrigger(TIMEBETWEENBYTES,Disc8271Trigger); /* To pick up result */
+  //   }
+  // }
+
+  // if (!LastByte) {
+  //   StatusReg = STATUS_REG_COMMAND_BUSY |
+  //               STATUS_REG_INTERRUPT_REQUEST |
+  //               STATUS_REG_NON_DMA_MODE;
+  //   UPDATENMISTATUS();
+  //   SetTrigger(TIMEBETWEENBYTES,Disc8271Trigger);
+  // }
+}
 
 /*--------------------------------------------------------------------------*/
-// static void DoVarLength_ReadDataAndDeldCommand(void) {
+function Do128ByteSR_ReadDataAndDeldCommand() {
+  DoSelects();
+  NotImp("Do128ByteSR_ReadDataAndDeldCommand");
+}
+
+/*--------------------------------------------------------------------------*/
+// function DoVarLength_ReadDataAndDeldCommand() {
 //   /* Use normal read command for now - deleted data not supported */
 //   DoVarLength_ReadDataCommand();
 // }
@@ -594,7 +648,7 @@ function DoSelects() {
 //   CommandStatus.ByteWithinSector=0;
 //   SetTrigger(TIMEBETWEENBYTES,Disc8271Trigger);
 //   StatusReg = STATUS_REG_COMMAND_BUSY;
-//   UPDATENMISTATUS;
+//   UPDATENMISTATUS();
 // }
 
 /*--------------------------------------------------------------------------*/
@@ -603,7 +657,7 @@ function DoSelects() {
 
 //   if (CommandStatus.SectorsToGo<0) {
 //     StatusReg = STATUS_REG_RESULT_FULL | STATUS_REG_INTERRUPT_REQUEST;
-//     UPDATENMISTATUS;
+//     UPDATENMISTATUS();
 //     return;
 //   }
 
@@ -635,7 +689,7 @@ function DoSelects() {
 //       StatusReg = STATUS_REG_COMMAND_BUSY |
 //                   STATUS_REG_INTERRUPT_REQUEST |
 //                   STATUS_REG_NON_DMA_MODE;
-//       UPDATENMISTATUS;
+//       UPDATENMISTATUS();
 //       LastByte = true;
 //       CommandStatus.SectorsToGo=-1; /* To let us bail out */
 //       SetTrigger(TIMEBETWEENBYTES,Disc8271Trigger); /* To pick up result */
@@ -646,7 +700,7 @@ function DoSelects() {
 //     StatusReg = STATUS_REG_COMMAND_BUSY |
 //                 STATUS_REG_INTERRUPT_REQUEST |
 //                 STATUS_REG_NON_DMA_MODE;
-//     UPDATENMISTATUS;
+//     UPDATENMISTATUS();
 //     SetTrigger(TIMEBETWEENBYTES,Disc8271Trigger);
 //   }
 // }
@@ -682,14 +736,14 @@ function DoSelects() {
 //   }
 
 //   StatusReg = STATUS_REG_COMMAND_BUSY;
-//   UPDATENMISTATUS;
+//   UPDATENMISTATUS();
 //   SetTrigger(100,Disc8271Trigger); /* A short delay to causing an interrupt */
 // }
 
 /*--------------------------------------------------------------------------*/
 // static void VerifyInterrupt(void) {
 //   StatusReg = STATUS_REG_RESULT_FULL | STATUS_REG_INTERRUPT_REQUEST;
-//   UPDATENMISTATUS;
+//   UPDATENMISTATUS();
 //   ResultReg = RESULT_REG_SUCCESS; // All OK
 // }
 
@@ -734,7 +788,7 @@ function DoSelects() {
 //     CommandStatus.ByteWithinSector=0;
 //     SetTrigger(TIMEBETWEENBYTES,Disc8271Trigger);
 //     StatusReg = STATUS_REG_COMMAND_BUSY;
-//     UPDATENMISTATUS;
+//     UPDATENMISTATUS();
 //     FirstWriteInt = true;
 //   } else {
 //     DoErr(RESULT_REG_DRIVE_NOT_PRESENT); // Sector not found
@@ -747,7 +801,7 @@ function DoSelects() {
 
 //   if (CommandStatus.SectorsToGo<0) {
 //     StatusReg = STATUS_REG_RESULT_FULL | STATUS_REG_INTERRUPT_REQUEST;
-//     UPDATENMISTATUS;
+//     UPDATENMISTATUS();
 //     return;
 //   }
 
@@ -779,7 +833,7 @@ function DoSelects() {
 //       /* Last sector done, write the track back to disc */
 //       if (SaveTrackImage(Selects[0] ? 0 : 1, CURRENTHEAD, CommandStatus.TrackAddr)) {
 //         StatusReg = STATUS_REG_RESULT_FULL;
-//         UPDATENMISTATUS;
+//         UPDATENMISTATUS();
 //         LastByte = true;
 //         CommandStatus.SectorsToGo=-1; /* To let us bail out */
 //         SetTrigger(0,Disc8271Trigger); /* To pick up result */
@@ -794,58 +848,63 @@ function DoSelects() {
 //     StatusReg = STATUS_REG_COMMAND_BUSY |
 //                 STATUS_REG_INTERRUPT_REQUEST |
 //                 STATUS_REG_NON_DMA_MODE;
-//     UPDATENMISTATUS;
+//     UPDATENMISTATUS();
 //     SetTrigger(TIMEBETWEENBYTES * 256,Disc8271Trigger);
 //   }
 // }
 
 /*--------------------------------------------------------------------------*/
 
-// static void SeekInterrupt() {
-//   StatusReg = STATUS_REG_RESULT_FULL | STATUS_REG_INTERRUPT_REQUEST;
-//   UPDATENMISTATUS;
-//   ResultReg = RESULT_REG_SUCCESS; // All OK
-// }
+function SeekInterrupt() {
+  StatusReg = STATUS_REG_RESULT_FULL | STATUS_REG_INTERRUPT_REQUEST;
+  UPDATENMISTATUS();
+  ResultReg = RESULT_REG_SUCCESS; // All OK
+}
 
 /*--------------------------------------------------------------------------*/
-// static void DoSeekCommand(void) {
-//   DoSelects();
+function DoSeekCommand() {
+  DoSelects();
 
-//   DoLoadHead();
+  DoLoadHead();
 
-//   int Drive = GetSelectedDrive();
+  const Drive = GetSelectedDrive();
 
-//   if (Drive<0) {
-//     DoErr(RESULT_REG_DRIVE_NOT_READY);
-//     return;
-//   }
+  if (Drive < 0) {
+    DoErr(RESULT_REG_DRIVE_NOT_READY);
+    return;
+  }
 
-//   Internal_CurrentTrack[Drive]=Params[0];
+  Internal_CurrentTrack[Drive] = Params[0];
 
-//   StatusReg = STATUS_REG_COMMAND_BUSY;
-//   UPDATENMISTATUS;
-//   SetTrigger(100,Disc8271Trigger); /* A short delay to causing an interrupt */
-// }
+  StatusReg = STATUS_REG_COMMAND_BUSY;
+  UPDATENMISTATUS();
+  Disc8271Trigger = SetTrigger(100); /* A short delay to causing an interrupt */
+}
 
 /*--------------------------------------------------------------------------*/
-// static void DoReadDriveStatusCommand(void) {
-//   bool Track0 = false;
-//   bool WriteProt = false;
+function DoReadDriveStatusCommand() {
+  let Track0 = false;
+  let WriteProt = false;
 
-//   if (ThisCommand & 0x40) {
-//     Track0=(Internal_CurrentTrack[0]==0);
-//     WriteProt=(!Writeable[0]);
-//   }
+  if (ThisCommand & 0x40) {
+    Track0 = Internal_CurrentTrack[0] == 0;
+    WriteProt = !Writeable[0];
+  }
 
-//   if (ThisCommand & 0x80) {
-//     Track0=(Internal_CurrentTrack[1]==0);
-//     WriteProt=(!Writeable[1]);
-//   }
+  if (ThisCommand & 0x80) {
+    Track0 = Internal_CurrentTrack[1] == 0;
+    WriteProt = !Writeable[1];
+  }
 
-//   ResultReg=0x80 | (Selects[1]?0x40:0) | (Selects[0]?0x4:0) | (Track0?2:0) | (WriteProt?8:0);
-//   StatusReg |= STATUS_REG_RESULT_FULL;
-//   UPDATENMISTATUS;
-// }
+  ResultReg =
+    0x80 |
+    (Selects[1] ? 0x40 : 0) |
+    (Selects[0] ? 0x4 : 0) |
+    (Track0 ? 2 : 0) |
+    (WriteProt ? 8 : 0);
+  StatusReg |= STATUS_REG_RESULT_FULL;
+  UPDATENMISTATUS();
+}
 
 /*--------------------------------------------------------------------------*/
 
@@ -909,10 +968,9 @@ function DoWriteSpecialCommand() {
       break;
 
     case SPECIAL_REG_DRIVE_CONTROL_OUTPUT_PORT:
-      throw "not impl";
-      // Internal_DriveControlOutputPort = Params[1];
-      // Selects[0] = (Params[1] & 0x40) != 0;
-      // Selects[1] = (Params[1] & 0x80) != 0;
+      Internal_DriveControlOutputPort = Params[1];
+      Selects[0] = (Params[1] & 0x40) != 0;
+      Selects[1] = (Params[1] & 0x80) != 0;
       break;
 
     case SPECIAL_REG_DRIVE_CONTROL_INPUT_PORT:
@@ -950,68 +1008,70 @@ function DoWriteSpecialCommand() {
 }
 
 /*--------------------------------------------------------------------------*/
-// static void DoReadSpecialCommand(void) {
-//   DoSelects();
+function DoReadSpecialCommand() {
+  DoSelects();
 
-//   switch (Params[0]) {
-//     case SPECIAL_REG_SCAN_SECTOR_NUMBER:
-//       ResultReg = Internal_Scan_SectorNum;
-//       break;
+  switch (Params[0]) {
+    case SPECIAL_REG_SCAN_SECTOR_NUMBER:
+      ResultReg = Internal_Scan_SectorNum;
+      break;
 
-//     case SPECIAL_REG_SCAN_COUNT_MSB:
-//       ResultReg = (Internal_Scan_Count >> 8) & 0xff;
-//       break;
+    case SPECIAL_REG_SCAN_COUNT_MSB:
+      throw "not impl";
+      //ResultReg = (Internal_Scan_Count >> 8) & 0xff;
+      break;
 
-//     case SPECIAL_REG_SCAN_COUNT_LSB:
-//       ResultReg = Internal_Scan_Count & 0xff;
-//       break;
+    case SPECIAL_REG_SCAN_COUNT_LSB:
+      throw "not impl";
+      //ResultReg = Internal_Scan_Count & 0xff;
+      break;
 
-//     case SPECIAL_REG_SURFACE_0_CURRENT_TRACK:
-//       ResultReg = Internal_CurrentTrack[0];
-//       break;
+    case SPECIAL_REG_SURFACE_0_CURRENT_TRACK:
+      ResultReg = Internal_CurrentTrack[0];
+      break;
 
-//     case SPECIAL_REG_SURFACE_1_CURRENT_TRACK:
-//       ResultReg = Internal_CurrentTrack[1];
-//       break;
+    case SPECIAL_REG_SURFACE_1_CURRENT_TRACK:
+      ResultReg = Internal_CurrentTrack[1];
+      break;
 
-//     case SPECIAL_REG_MODE_REGISTER:
-//       ResultReg = Internal_ModeReg;
-//       break;
+    case SPECIAL_REG_MODE_REGISTER:
+      ResultReg = Internal_ModeReg;
+      break;
 
-//     case SPECIAL_REG_DRIVE_CONTROL_OUTPUT_PORT:
-//       ResultReg = Internal_DriveControlOutputPort;
-//       break;
+    case SPECIAL_REG_DRIVE_CONTROL_OUTPUT_PORT:
+      ResultReg = Internal_DriveControlOutputPort;
+      break;
 
-//     case SPECIAL_REG_DRIVE_CONTROL_INPUT_PORT:
-//       ResultReg = Internal_DriveControlInputPort;
-//       break;
+    case SPECIAL_REG_DRIVE_CONTROL_INPUT_PORT:
+      ResultReg = Internal_DriveControlInputPort;
+      break;
 
-//     case SPECIAL_REG_SURFACE_0_BAD_TRACK_1:
-//       ResultReg = Internal_BadTracks[0][0];
-//       break;
+    case SPECIAL_REG_SURFACE_0_BAD_TRACK_1:
+      ResultReg = Internal_BadTracks[0][0];
+      break;
 
-//     case SPECIAL_REG_SURFACE_0_BAD_TRACK_2:
-//       ResultReg = Internal_BadTracks[0][1];
-//       break;
+    case SPECIAL_REG_SURFACE_0_BAD_TRACK_2:
+      ResultReg = Internal_BadTracks[0][1];
+      break;
 
-//     case SPECIAL_REG_SURFACE_1_BAD_TRACK_1:
-//       ResultReg = Internal_BadTracks[1][0];
-//       break;
+    case SPECIAL_REG_SURFACE_1_BAD_TRACK_1:
+      ResultReg = Internal_BadTracks[1][0];
+      break;
 
-//     case SPECIAL_REG_SURFACE_1_BAD_TRACK_2:
-//       ResultReg = Internal_BadTracks[1][1];
-//       break;
+    case SPECIAL_REG_SURFACE_1_BAD_TRACK_2:
+      ResultReg = Internal_BadTracks[1][1];
+      break;
 
-//     default:
-//       #if ENABLE_LOG
-//       WriteLog("Read of bad special register\n");
-//       #endif
-//       return;
-//   }
+    default:
+      // #if ENABLE_LOG
+      // WriteLog("Read of bad special register\n");
+      // #endif
+      return;
+  }
 
-//   StatusReg |= STATUS_REG_RESULT_FULL;
-//   UPDATENMISTATUS;
-// }
+  StatusReg |= STATUS_REG_RESULT_FULL;
+  UPDATENMISTATUS();
+}
 
 /*--------------------------------------------------------------------------*/
 // static void DoBadCommand(void) {
@@ -1029,15 +1089,43 @@ const PrimaryCommandLookup: PrimaryCommandLookupType[] = [
   // {0x0e, 0x3f, 2, Do128ByteSR_WriteDeletedDataCommand, NULL, "Write Deleted Data (128 byte/single record)"},
   // {0x0f, 0x3f, 3, DoVarLength_WriteDeletedDataCommand, NULL, "Write Deleted Data (Variable Length/Multi-Record)"},
   // {0x12, 0x3f, 2, Do128ByteSR_ReadDataCommand, NULL, "Read Data (128 byte/single record)"},
-  // {0x13, 0x3f, 3, DoVarLength_ReadDataCommand, ReadInterrupt, "Read Data (Variable Length/Multi-Record)"},
-  // {0x16, 0x3f, 2, Do128ByteSR_ReadDataAndDeldCommand, NULL, "Read Data & deleted data (128 byte/single record)"},
+  {
+    CommandNum: 0x13,
+    Mask: 0x3f,
+    NParams: 3,
+    ToCall: DoVarLength_ReadDataCommand,
+    IntHandler: ReadInterrupt,
+    Ident: "Read Data (Variable Length/Multi-Record)",
+  },
+  {
+    CommandNum: 0x16,
+    Mask: 0x3f,
+    NParams: 2,
+    ToCall: Do128ByteSR_ReadDataAndDeldCommand,
+    IntHandler: undefined,
+    Ident: "Read Data & deleted data (128 byte/single record)",
+  },
   // {0x17, 0x3f, 3, DoVarLength_ReadDataAndDeldCommand, ReadInterrupt, "Read Data & deleted data (Variable Length/Multi-Record)"},
   // {0x1b, 0x3f, 3, DoReadIDCommand, ReadIDInterrupt, "ReadID" },
   // {0x1e, 0x3f, 2, Do128ByteSR_VerifyDataAndDeldCommand, NULL, "Verify Data and Deleted Data (128 byte/single record)"},
   // {0x1f, 0x3f, 3, DoVarLength_VerifyDataAndDeldCommand, VerifyInterrupt, "Verify Data and Deleted Data (Variable Length/Multi-Record)"},
   // {0x23, 0x3f, 5, DoFormatCommand, FormatInterrupt, "Format"},
-  // {0x29, 0x3f, 1, DoSeekCommand, SeekInterrupt, "Seek"},
-  // {0x2c, 0x3f, 0, DoReadDriveStatusCommand, NULL, "Read drive status"},
+  {
+    CommandNum: 0x29,
+    Mask: 0x3f,
+    NParams: 1,
+    ToCall: DoSeekCommand,
+    IntHandler: SeekInterrupt,
+    Ident: "Seek",
+  },
+  {
+    CommandNum: 0x2c,
+    Mask: 0x3f,
+    NParams: 0,
+    ToCall: DoReadDriveStatusCommand,
+    IntHandler: undefined,
+    Ident: "Read drive status",
+  },
   {
     CommandNum: 0x35,
     Mask: 0xff,
@@ -1054,7 +1142,14 @@ const PrimaryCommandLookup: PrimaryCommandLookupType[] = [
     IntHandler: undefined,
     Ident: "Write special registers",
   },
-  // {0x3d, 0x3f, 1, DoReadSpecialCommand, NULL, "Read special registers" },
+  {
+    CommandNum: 0x3d,
+    Mask: 0x3f,
+    NParams: 1,
+    ToCall: DoReadSpecialCommand,
+    IntHandler: undefined,
+    Ident: "Read special registers",
+  },
   // {0,    0,    0, DoBadCommand, NULL, "Unknown command"} /* Terminator due to 0 mask matching all */
 ];
 
@@ -1094,16 +1189,15 @@ export function Disc8271Read(Address: number) {
       break;
 
     case 1:
-      throw "not impl";
       //   #if ENABLE_LOG
       //   WriteLog("8271 Result register read (0x%02X)\n", ResultReg);
       //   #endif
 
-      //   // Clear interrupt request and result reg full flag
-      //   StatusReg &= ~(STATUS_REG_RESULT_FULL | STATUS_REG_INTERRUPT_REQUEST);
-      //   UPDATENMISTATUS;
-      //   Value=ResultReg;
-      //   ResultReg = RESULT_REG_SUCCESS; // Register goes to 0 after its read
+      // Clear interrupt request and result reg full flag
+      StatusReg &= ~(STATUS_REG_RESULT_FULL | STATUS_REG_INTERRUPT_REQUEST);
+      UPDATENMISTATUS();
+      Value = ResultReg;
+      ResultReg = RESULT_REG_SUCCESS; // Register goes to 0 after its read
       break;
 
     case 4:
@@ -1114,7 +1208,7 @@ export function Disc8271Read(Address: number) {
 
       //   // Clear interrupt and non-dma request - not stated but DFS never looks at result reg!
       //   StatusReg &= ~(STATUS_REG_INTERRUPT_REQUEST | STATUS_REG_NON_DMA_MODE);
-      //   UPDATENMISTATUS;
+      //   UPDATENMISTATUS();
       //   Value=DataReg;
       break;
 
@@ -1150,7 +1244,7 @@ function CommandRegWrite(Value: number) {
   // No parameters then call routine immediately
   if (NParamsInThisCommand == 0) {
     StatusReg &= 0x7e;
-    UPDATENMISTATUS;
+    UPDATENMISTATUS();
     ptr.ToCall();
   }
 }
@@ -1170,12 +1264,12 @@ function ParamRegWrite(Value: number) {
     Params[PresentParam++] = Value;
 
     StatusReg &= 0xfe; /* Observed on beeb */
-    UPDATENMISTATUS;
+    UPDATENMISTATUS();
 
     // Got all params yet?
     if (PresentParam >= NParamsInThisCommand) {
       StatusReg &= 0x7e; /* Observed on beeb */
-      UPDATENMISTATUS;
+      UPDATENMISTATUS();
 
       const ptr = CommandPtrFromNumber(ThisCommand);
 
@@ -1235,7 +1329,7 @@ export function Disc8271Write(Address: number, Value: number) {
       // DebugTrace("8271: Data register write, value=0x%02X\n", Value);
 
       // StatusReg &= ~(STATUS_REG_INTERRUPT_REQUEST | STATUS_REG_NON_DMA_MODE);
-      // UPDATENMISTATUS;
+      // UPDATENMISTATUS();
       // DataReg = Value;
       break;
 
@@ -1332,20 +1426,20 @@ function Disc8271_poll_real() {
   //   if (DriveHeadMotorUpdate())
   //     return;
 
-  //   // Set the interrupt flag in the status register
+  // Set the interrupt flag in the status register
   StatusReg |= STATUS_REG_INTERRUPT_REQUEST;
   UPDATENMISTATUS();
 
-  //   if (NextInterruptIsErr != 0) {
-  //     ResultReg=NextInterruptIsErr;
-  //     StatusReg = STATUS_REG_RESULT_FULL | STATUS_REG_INTERRUPT_REQUEST;
-  //     UPDATENMISTATUS;
-  //     NextInterruptIsErr=0;
-  //   } else {
-  //     /* Should only happen while a command is still active */
-  //     const PrimaryCommandLookupType *comptr = CommandPtrFromNumber(ThisCommand);
-  //     if (comptr->IntHandler!=NULL) comptr->IntHandler();
-  //   }
+  if (NextInterruptIsErr != 0) {
+    ResultReg = NextInterruptIsErr;
+    StatusReg = STATUS_REG_RESULT_FULL | STATUS_REG_INTERRUPT_REQUEST;
+    UPDATENMISTATUS();
+    NextInterruptIsErr = 0;
+  } else {
+    /* Should only happen while a command is still active */
+    const comptr = CommandPtrFromNumber(ThisCommand);
+    if (comptr.IntHandler) comptr.IntHandler();
+  }
 
   //   DriveHeadScheduleUnload();
 }
@@ -1541,12 +1635,12 @@ function Disc8271_poll_real() {
 
 let InitialInit = true;
 export function Disc8271Reset() {
-  //   ResultReg=0;
+  ResultReg = 0;
   StatusReg = 0;
 
   UPDATENMISTATUS();
 
-  //   Internal_Scan_SectorNum=0;
+  Internal_Scan_SectorNum = 0;
   //   Internal_Scan_Count=0; /* Read as two bytes */
   Internal_ModeReg = 0;
   //   Internal_CurrentTrack[0]=Internal_CurrentTrack[1]=0; /* 0/1 for surface number */
@@ -1570,11 +1664,11 @@ export function Disc8271Reset() {
   ThisCommand = -1;
   NParamsInThisCommand = 0;
   PresentParam = 0;
-  //   Selects[0]=Selects[1]=false;
+  Selects[0] = Selects[1] = false;
 
   if (InitialInit) {
     InitialInit = false;
-    //InitDiscStore();
+    InitDiscStore();
   }
 }
 

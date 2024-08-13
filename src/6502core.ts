@@ -43,6 +43,9 @@ export const IRQ_tube = 3;
 export const IRQ_teletext = 4;
 export const IRQ_hdc = 5;
 
+export const nmi_floppy = 0;
+export const nmi_econet = 1;
+
 const FlagC = 1;
 const FlagZ = 2;
 const FlagI = 4;
@@ -88,6 +91,10 @@ let IRQCycles: number; // unsigned char
 let intStatus = 0; /* unsigned char, bit set (nums in IRQ_Nums) if interrupt being caused */
 export const setIntStatus = (val: number) => (intStatus = val);
 export const getIntStatus = () => intStatus;
+
+let NMIStatus = 0; /* bit set (nums in NMI_Nums) if NMI being caused */
+export const SetNMIStatus = (flag: number) => (NMIStatus |= flag);
+export const ClearNMIStatus = (flag: number) => (NMIStatus &= ~flag);
 
 let NMILock = false; // Well I think NMI's are maskable - to stop repeated NMI's - the lock is released when an RTI is done
 
@@ -1042,7 +1049,7 @@ export function Init6502core() {
   PSR = FlagI; // Interrupts off for starters
 
   intStatus = 0;
-  // NMIStatus = 0;
+  NMIStatus = 0;
   NMILock = false;
 }
 
@@ -1056,20 +1063,28 @@ function DoInterrupt() {
 } /* DoInterrupt */
 
 /*-------------------------------------------------------------------------*/
-// void DoNMI(void) {
-//   NMILock = true;
-//   PushWord(ProgramCounter);
-//   Push(PSR);
-//   ProgramCounter=BeebReadMem(0xfffa) | (BeebReadMem(0xfffb)<<8);
-//   SetPSR(FlagI,0,0,1,0,0,0,0); /* Normal interrupts should be disabled during NMI ? */
-//   IRQCycles=7;
-// } /* DoNMI */
+function DoNMI() {
+  NMILock = true;
+  PushWord(ProgramCounter);
+  Push(PSR);
+  ProgramCounter = BeebReadMem(0xfffa) | (BeebReadMem(0xfffb) << 8);
+  SetPSR(
+    FlagI,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+  ); /* Normal interrupts should be disabled during NMI ? */
+  IRQCycles = 7;
+} /* DoNMI */
 
 /*-------------------------------------------------------------------------*/
 /* Execute one 6502 instruction, move program counter on                   */
+let OldNMIStatus = 0;
 export function Exec6502Instruction() {
-  // static unsigned char OldNMIStatus;
-  // int OldPC;
   let iFlagJustCleared = false;
   let iFlagJustSet = false;
 
@@ -2220,9 +2235,9 @@ export function Exec6502Instruction() {
         // SBC imm
         SBCInstrHandler(ReadPaged(ProgramCounter++));
         break;
-      // 		case 0xea:
-      // 			// NOP
-      // 			break;
+      case 0xea:
+        // NOP
+        break;
       // 		case 0xeb:
       // 			// SBC imm
       // 			SBCInstrHandler(ReadPaged(ProgramCounter++));
@@ -2363,15 +2378,14 @@ export function Exec6502Instruction() {
     }
 
     // Check for NMI
-    // if ((NMIStatus && !OldNMIStatus) || (NMIStatus & 1<<nmi_econet))
-    // {
-    // 	NMIStatus &= ~(1<<nmi_econet);
-    // 	DoNMI();
-    // 	PollHardware(IRQCycles);
-    // 	PollVIAs(IRQCycles);
-    // 	IRQCycles=0;
-    // }
-    // OldNMIStatus=NMIStatus;
+    if ((NMIStatus && !OldNMIStatus) || NMIStatus & (1 << nmi_econet)) {
+      NMIStatus &= ~(1 << nmi_econet);
+      DoNMI();
+      PollHardware(IRQCycles);
+      PollVIAs(IRQCycles);
+      IRQCycles = 0;
+    }
+    OldNMIStatus = NMIStatus;
 
     if (sleepTime) return sleepTime;
   }
