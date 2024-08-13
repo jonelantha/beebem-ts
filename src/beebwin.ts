@@ -109,7 +109,7 @@ async function ResetBeebSystem(LoadRoms: boolean) {
   Disc8271Reset();
   AtoDInit();
   FreeDiscImage(0);
-  // 	// Keep the disc images loaded
+  // Keep the disc images loaded
   FreeDiscImage(1);
 }
 

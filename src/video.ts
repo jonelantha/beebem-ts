@@ -1516,53 +1516,6 @@ function VideoAddCursor() {
   }
 }
 
-type VideoOverrides = {
-  CRTC_HorizontalTotal: number;
-  CRTC_HorizontalDisplayed: number;
-  CRTC_HorizontalSyncPos: number;
-  CRTC_SyncWidth: number;
-  CRTC_VerticalTotal: number;
-  CRTC_VerticalTotalAdjust: number;
-  CRTC_VerticalDisplayed: number;
-  CRTC_VerticalSyncPos: number;
-  CRTC_InterlaceAndDelay: number;
-  CRTC_ScanLinesPerChar: number;
-  CRTC_CursorStart: number;
-  CRTC_CursorEnd: number;
-  CRTC_ScreenStartHigh: number;
-  CRTC_ScreenStartLow: number;
-  CRTC_CursorPosHigh: number;
-  CRTC_CursorPosLow: number;
-  VideoULA_ControlReg: number;
-  VideoULA_Palette: number[];
-};
-export function tempVideoOverride(videoOverrides: VideoOverrides) {
-  ({
-    CRTC_HorizontalTotal,
-    CRTC_HorizontalDisplayed,
-    CRTC_HorizontalSyncPos,
-    CRTC_SyncWidth,
-    CRTC_VerticalTotal,
-    CRTC_VerticalTotalAdjust,
-    CRTC_VerticalDisplayed,
-    CRTC_VerticalSyncPos,
-    CRTC_InterlaceAndDelay,
-    CRTC_ScanLinesPerChar,
-    CRTC_CursorStart,
-    CRTC_CursorEnd,
-    CRTC_ScreenStartHigh,
-    CRTC_ScreenStartLow,
-    CRTC_CursorPosHigh,
-    CRTC_CursorPosLow,
-  } = videoOverrides);
-
-  VideoULAWrite(0, videoOverrides.VideoULA_ControlReg);
-
-  for (let i = 0; i < 16; i++) {
-    VideoULA_Palette[i] = videoOverrides.VideoULA_Palette[i];
-  }
-}
-
 /*-------------------------------------------------------------------------*/
 
 export function DebugVideoState() {

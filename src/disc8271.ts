@@ -54,7 +54,7 @@ const STATUS_REG_COMMAND_BUSY = 0x80;
 // const unsigned char STATUS_REG_PARAMETER_FULL     = 0x20;
 const STATUS_REG_RESULT_FULL = 0x10;
 const STATUS_REG_INTERRUPT_REQUEST = 0x08;
-// const unsigned char STATUS_REG_NON_DMA_MODE       = 0x04;
+const STATUS_REG_NON_DMA_MODE = 0x04;
 
 // 8271 Result register
 const RESULT_REG_SUCCESS = 0x00;
@@ -90,7 +90,7 @@ const SPECIAL_REG_SURFACE_1_BAD_TRACK_2 = 0x19;
 let Disc8271Trigger = 0; /* int Cycle based time Disc8271Trigger */
 let ResultReg = 0;
 let StatusReg = 0; // unsigned char
-// static unsigned char DataReg;
+let DataReg: number;
 let Internal_Scan_SectorNum = 0;
 // static unsigned int Internal_Scan_Count; /* Read as two bytes */
 let Internal_ModeReg = 0;
@@ -175,7 +175,7 @@ const DiscStore: TrackType[][][] = Array.from({ length: 2 }, () =>
 //static char FileNames[2][256];
 
 /* Number of sides of loaded disc images */
-//static int NumHeads[2];
+const NumHeads = [0, 0];
 
 // // static bool SaveTrackImage(int DriveNum, int HeadNum, int TrackNum);
 // // static void DriveHeadScheduleUnload(void);
@@ -348,17 +348,17 @@ function DoErr(ErrNum: number) {
 
 // Checks a few things in the sector - returns true if OK
 
-// static bool ValidateSector(const SectorType *Sector, int Track, int SecLength) {
-//   if (Sector->IDField.CylinderNum != Track) {
-//     return false;
-//   }
+function ValidateSector(Sector: SectorType, Track: number, SecLength: number) {
+  if (Sector.IDField.CylinderNum != Track) {
+    return false;
+  }
 
-//   if (Sector->IDField.PhysRecLength != SecLength) {
-//     return false;
-//   }
+  if (Sector.IDField.PhysRecLength != SecLength) {
+    return false;
+  }
 
-//   return true;
-// }
+  return true;
+}
 
 /*--------------------------------------------------------------------------*/
 // static void DoVarLength_ScanDataCommand(void) {
@@ -528,27 +528,26 @@ function DoVarLength_ReadDataCommand() {
     DoErr(RESULT_REG_DRIVE_NOT_PRESENT);
     return;
   }
-  throw "not impl";
 
-  // CommandStatus.TrackAddr = Params[0];
-  // CommandStatus.CurrentSector = Params[1];
-  // CommandStatus.SectorsToGo = Params[2] & 31;
-  // CommandStatus.SectorLength = 1 << (7 + ((Params[2] >> 5) & 7));
+  CommandStatus.TrackAddr = Params[0];
+  CommandStatus.CurrentSector = Params[1];
+  CommandStatus.SectorsToGo = Params[2] & 31;
+  CommandStatus.SectorLength = 1 << (7 + ((Params[2] >> 5) & 7));
 
-  // if (
-  //   ValidateSector(
-  //     CommandStatus.CurrentSectorPtr,
-  //     CommandStatus.TrackAddr,
-  //     CommandStatus.SectorLength,
-  //   )
-  // ) {
-  //   CommandStatus.ByteWithinSector = 0;
-  //   Disc8271Trigger = SetTrigger(TIMEBETWEENBYTES);
-  //   StatusReg = STATUS_REG_COMMAND_BUSY;
-  //   UPDATENMISTATUS();
-  // } else {
-  //   DoErr(RESULT_REG_DRIVE_NOT_PRESENT);
-  // }
+  if (
+    ValidateSector(
+      CommandStatus.CurrentSectorPtr,
+      CommandStatus.TrackAddr,
+      CommandStatus.SectorLength,
+    )
+  ) {
+    CommandStatus.ByteWithinSector = 0;
+    Disc8271Trigger = SetTrigger(TIMEBETWEENBYTES);
+    StatusReg = STATUS_REG_COMMAND_BUSY;
+    UPDATENMISTATUS();
+  } else {
+    DoErr(RESULT_REG_DRIVE_NOT_PRESENT);
+  }
 }
 
 /*--------------------------------------------------------------------------*/
@@ -561,47 +560,51 @@ function ReadInterrupt() {
     return;
   }
 
-  throw "not impl";
-
-  // DataReg=CommandStatus.CurrentSectorPtr->Data[CommandStatus.ByteWithinSector++];
+  DataReg =
+    CommandStatus.CurrentSectorPtr!.Data[CommandStatus.ByteWithinSector++];
 
   // #if ENABLE_LOG
   // WriteLog("ReadInterrupt called - DataReg=0x%02X ByteWithinSector=%d\n", DataReg, CommandStatus.ByteWithinSector);
   // #endif
 
-  // ResultReg=0;
-  // if (CommandStatus.ByteWithinSector>=CommandStatus.SectorLength) {
-  //   CommandStatus.ByteWithinSector=0;
-  //   /* I don't know if this can cause the thing to step - I presume not for the moment */
-  //   if (--CommandStatus.SectorsToGo) {
-  //     CommandStatus.CurrentSector++;
-  //     CommandStatus.CurrentSectorPtr = GetSectorPtr(CommandStatus.CurrentTrackPtr,
-  //                                                   CommandStatus.CurrentSector,
-  //                                                   false);
-  //     if (CommandStatus.CurrentSectorPtr == NULL) {
-  //       DoErr(RESULT_REG_DRIVE_NOT_PRESENT); // Sector not found
-  //       return;
-  //     }
-  //   } else {
-  //     /* Last sector done */
-  //     StatusReg = STATUS_REG_COMMAND_BUSY |
-  //                 STATUS_REG_RESULT_FULL |
-  //                 STATUS_REG_INTERRUPT_REQUEST |
-  //                 STATUS_REG_NON_DMA_MODE;
-  //     UPDATENMISTATUS();
-  //     LastByte = true;
-  //     CommandStatus.SectorsToGo=-1; /* To let us bail out */
-  //     SetTrigger(TIMEBETWEENBYTES,Disc8271Trigger); /* To pick up result */
-  //   }
-  // }
+  ResultReg = 0;
+  if (CommandStatus.ByteWithinSector >= CommandStatus.SectorLength) {
+    CommandStatus.ByteWithinSector = 0;
 
-  // if (!LastByte) {
-  //   StatusReg = STATUS_REG_COMMAND_BUSY |
-  //               STATUS_REG_INTERRUPT_REQUEST |
-  //               STATUS_REG_NON_DMA_MODE;
-  //   UPDATENMISTATUS();
-  //   SetTrigger(TIMEBETWEENBYTES,Disc8271Trigger);
-  // }
+    /* I don't know if this can cause the thing to step - I presume not for the moment */
+    if (--CommandStatus.SectorsToGo) {
+      CommandStatus.CurrentSector++;
+      CommandStatus.CurrentSectorPtr = GetSectorPtr(
+        CommandStatus.CurrentTrackPtr!,
+        CommandStatus.CurrentSector,
+        false,
+      );
+      if (CommandStatus.CurrentSectorPtr === undefined) {
+        DoErr(RESULT_REG_DRIVE_NOT_PRESENT); // Sector not found
+        return;
+      }
+    } else {
+      /* Last sector done */
+      StatusReg =
+        STATUS_REG_COMMAND_BUSY |
+        STATUS_REG_RESULT_FULL |
+        STATUS_REG_INTERRUPT_REQUEST |
+        STATUS_REG_NON_DMA_MODE;
+      UPDATENMISTATUS();
+      LastByte = true;
+      CommandStatus.SectorsToGo = -1; /* To let us bail out */
+      Disc8271Trigger = SetTrigger(TIMEBETWEENBYTES); /* To pick up result */
+    }
+  }
+
+  if (!LastByte) {
+    StatusReg =
+      STATUS_REG_COMMAND_BUSY |
+      STATUS_REG_INTERRUPT_REQUEST |
+      STATUS_REG_NON_DMA_MODE;
+    UPDATENMISTATUS();
+    Disc8271Trigger = SetTrigger(TIMEBETWEENBYTES);
+  }
 }
 
 /*--------------------------------------------------------------------------*/
@@ -1201,15 +1204,14 @@ export function Disc8271Read(Address: number) {
       break;
 
     case 4:
-      throw "not impl";
       //   #if ENABLE_LOG
       //   WriteLog("8271 data register read\n");
       //   #endif
 
-      //   // Clear interrupt and non-dma request - not stated but DFS never looks at result reg!
-      //   StatusReg &= ~(STATUS_REG_INTERRUPT_REQUEST | STATUS_REG_NON_DMA_MODE);
-      //   UPDATENMISTATUS();
-      //   Value=DataReg;
+      // Clear interrupt and non-dma request - not stated but DFS never looks at result reg!
+      StatusReg &= ~(STATUS_REG_INTERRUPT_REQUEST | STATUS_REG_NON_DMA_MODE);
+      UPDATENMISTATUS();
+      Value = DataReg;
       break;
 
     default:
@@ -1455,55 +1457,56 @@ export function FreeDiscImage(DriveNum: number) {
 }
 
 /*--------------------------------------------------------------------------*/
-// void LoadSimpleDiscImage(const char *FileName, int DriveNum, int HeadNum, int Tracks) {
-//   FILE *infile=fopen(FileName,"rb");
-//   if (!infile) {
-//     mainWin->Report(MessageType::Error,
-//                     "Could not open disc file:\n  %s", FileName);
+export async function LoadSimpleDiscImage(
+  FileName: string,
+  DriveNum: number,
+  HeadNum: number,
+  Tracks: number,
+) {
+  const res = await fetch(FileName);
+  const buffer = await res.arrayBuffer();
 
-//     return;
-//   }
+  // mainWin->SetImageName(FileName, DriveNum, DiscType::SSD);
+  // JGH, 26-Dec-2011
+  NumHeads[DriveNum] = 1; // 1 = TRACKSPERDRIVE SSD image
+  // 2 = 2 * TRACKSPERDRIVE DSD image
+  let Heads = 1;
 
-//   mainWin->SetImageName(FileName, DriveNum, DiscType::SSD);
+  if (buffer.byteLength > 0x40000) {
+    Heads = 2; // Long sequential image continues onto side 1
+    NumHeads[DriveNum] = 0; // 0 = 2 * TRACKSPERDRIVE SSD image
+  }
 
-//   // JGH, 26-Dec-2011
-//   NumHeads[DriveNum] = 1; // 1 = TRACKSPERDRIVE SSD image
-//                           // 2 = 2 * TRACKSPERDRIVE DSD image
-//   int Heads = 1;
-//   fseek(infile, 0L, SEEK_END);
-//   if (ftell(infile)>0x40000) {
-//     Heads = 2; // Long sequential image continues onto side 1
-//     NumHeads[DriveNum] = 0; // 0 = 2 * TRACKSPERDRIVE SSD image
-//   }
-//   fseek(infile, 0L, SEEK_SET);
-//   // JGH
-
-//   strcpy(FileNames[DriveNum], FileName);
-//   FreeDiscImage(DriveNum);
-
-//   for (int Head = HeadNum; Head < Heads; Head++) {
-//     for (int CurrentTrack = 0; CurrentTrack < Tracks; CurrentTrack++) {
-//       DiscStore[DriveNum][Head][CurrentTrack].LogicalSectors=10;
-//       DiscStore[DriveNum][Head][CurrentTrack].NSectors=10;
-//       SectorType *SecPtr = DiscStore[DriveNum][Head][CurrentTrack].Sectors = (SectorType*)calloc(10, sizeof(SectorType));
-//       DiscStore[DriveNum][Head][CurrentTrack].Gap1Size=0; /* Don't bother for the mo */
-//       DiscStore[DriveNum][Head][CurrentTrack].Gap3Size=0;
-//       DiscStore[DriveNum][Head][CurrentTrack].Gap5Size=0;
-
-//       for (int CurrentSector = 0; CurrentSector < 10; CurrentSector++) {
-//         SecPtr[CurrentSector].IDField.CylinderNum=CurrentTrack;
-//         SecPtr[CurrentSector].IDField.RecordNum=CurrentSector;
-//         SecPtr[CurrentSector].IDField.HeadNum=HeadNum;
-//         SecPtr[CurrentSector].IDField.PhysRecLength=256;
-//         SecPtr[CurrentSector].Deleted = false;
-//         SecPtr[CurrentSector].Data=(unsigned char *)calloc(1,256);
-//         fread(SecPtr[CurrentSector].Data,1,256,infile);
-//       }
-//     }
-//   }
-
-//   fclose(infile);
-// }
+  // JGH
+  // strcpy(FileNames[DriveNum], FileName);
+  FreeDiscImage(DriveNum);
+  let sectorNum = 0;
+  for (let Head = HeadNum; Head < Heads; Head++) {
+    for (let CurrentTrack = 0; CurrentTrack < Tracks; CurrentTrack++) {
+      DiscStore[DriveNum][Head][CurrentTrack].LogicalSectors = 10;
+      DiscStore[DriveNum][Head][CurrentTrack].NSectors = 10;
+      DiscStore[DriveNum][Head][CurrentTrack].Sectors = [];
+      DiscStore[DriveNum][Head][CurrentTrack].Gap1Size =
+        0; /* Don't bother for the mo */
+      DiscStore[DriveNum][Head][CurrentTrack].Gap3Size = 0;
+      DiscStore[DriveNum][Head][CurrentTrack].Gap5Size = 0;
+      for (let CurrentSector = 0; CurrentSector < 10; CurrentSector++) {
+        const SecPtr: SectorType = {
+          IDField: {
+            CylinderNum: CurrentTrack,
+            RecordNum: CurrentSector,
+            HeadNum: HeadNum,
+            PhysRecLength: 256,
+          },
+          Deleted: false,
+          Data: new Uint8Array(buffer, 256 * sectorNum, 256),
+        };
+        DiscStore[DriveNum][Head][CurrentTrack].Sectors.push(SecPtr);
+        sectorNum++;
+      }
+    }
+  }
+}
 
 /*--------------------------------------------------------------------------*/
 // void LoadSimpleDSDiscImage(const char *FileName, int DriveNum, int Tracks) {
