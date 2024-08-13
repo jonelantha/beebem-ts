@@ -1446,24 +1446,13 @@ function Disc8271_poll_real() {
 
 /*--------------------------------------------------------------------------*/
 
-// void FreeDiscImage(int DriveNum) {
-//   for (int Track = 0; Track < TRACKSPERDRIVE; Track++) {
-//     for (int Head = 0; Head < 2; Head++) {
-//       SectorType *SecPtr = DiscStore[DriveNum][Head][Track].Sectors;
-
-//       if (SecPtr != NULL) {
-//         for (int Sector = 0; Sector < 10; Sector++) {
-//           if (SecPtr[Sector].Data != NULL) {
-//             free(SecPtr[Sector].Data);
-//             SecPtr[Sector].Data = NULL;
-//           }
-//         }
-//         free(SecPtr);
-//         DiscStore[DriveNum][Head][Track].Sectors = NULL;
-//       }
-//     }
-//   }
-// }
+export function FreeDiscImage(DriveNum: number) {
+  for (let Track = 0; Track < TRACKSPERDRIVE; Track++) {
+    for (let Head = 0; Head < 2; Head++) {
+      DiscStore[DriveNum][Head][Track].Sectors = [];
+    }
+  }
+}
 
 /*--------------------------------------------------------------------------*/
 // void LoadSimpleDiscImage(const char *FileName, int DriveNum, int HeadNum, int Tracks) {

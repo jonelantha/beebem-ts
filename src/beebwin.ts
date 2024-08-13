@@ -34,7 +34,7 @@ import { AtoDInit } from "./atodconv";
 import { BeebMemInit } from "./beebmem";
 import { bufferHeight, bufferWidth, InitSurfaces } from "./beebwindx";
 import { KeyMap, KeyMapping, REAL_TIME_TARGET } from "./beebwinh";
-import { Disc8271Reset } from "./disc8271";
+import { Disc8271Reset, FreeDiscImage } from "./disc8271";
 import { defaultKeymapData, logicalKeymapData } from "./keymap";
 import { BeebKeyDown, BeebKeyUp, SysVIAReset } from "./sysvia";
 import { UserVIAReset } from "./uservia";
@@ -108,9 +108,9 @@ async function ResetBeebSystem(LoadRoms: boolean) {
   VideoInit();
   Disc8271Reset();
   AtoDInit();
-  // 	FreeDiscImage(0);
+  FreeDiscImage(0);
   // 	// Keep the disc images loaded
-  // 	FreeDiscImage(1);
+  FreeDiscImage(1);
 }
 
 /****************************************************************************/
