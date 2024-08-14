@@ -1189,13 +1189,14 @@ export function Exec6502Instruction() {
         // ASL zp
         ASLInstrHandler(ZeroPgAddrModeHandler_Address());
         break;
-      // 		case 0x07: {
-      // 				// Undocumented instruction: SLO zp
-      // 				int ZeroPageAddress = ZeroPgAddrModeHandler_Address();
-      // 				ASLInstrHandler(ZeroPageAddress);
-      // 				ORAInstrHandler(WholeRam[ZeroPageAddress]);
-      // 			}
-      // 			break;
+      case 0x07:
+        {
+          // Undocumented instruction: SLO zp
+          const ZeroPageAddress = ZeroPgAddrModeHandler_Address();
+          ASLInstrHandler(ZeroPageAddress);
+          ORAInstrHandler(BEEBREADMEM_DIRECT(ZeroPageAddress));
+        }
+        break;
       case 0x08:
         // PHP
         Push(PSR | 48);
@@ -1261,10 +1262,10 @@ export function Exec6502Instruction() {
       // 			// ORA zp,X
       // 			ORAInstrHandler(ZeroPgXAddrModeHandler_Data());
       // 			break;
-      // 		case 0x16:
-      // 			// ASL zp,X
-      // 			ASLInstrHandler(ZeroPgXAddrModeHandler_Address());
-      // 			break;
+      case 0x16:
+        // ASL zp,X
+        ASLInstrHandler(ZeroPgXAddrModeHandler_Address());
+        break;
       // 		case 0x17: {
       // 				// Undocumented instruction: SLO zp,X
       // 				int ZeroPageAddress = ZeroPgXAddrModeHandler_Address();
@@ -1508,11 +1509,11 @@ export function Exec6502Instruction() {
         // LSR A
         LSRInstrHandler_Acc();
         break;
-      // 		case 0x4b:
-      // 			// Undocumented instruction: ALR imm
-      // 			ANDInstrHandler(ReadPaged(ProgramCounter++));
-      // 			LSRInstrHandler_Acc();
-      // 			break;
+      case 0x4b:
+        // Undocumented instruction: ALR imm
+        ANDInstrHandler(ReadPaged(ProgramCounter++));
+        LSRInstrHandler_Acc();
+        break;
       case 0x4c:
         // JMP abs
         ProgramCounter = AbsAddrModeHandler_Address();
@@ -1707,10 +1708,10 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: NOP zp,x
       // 			ZeroPgXAddrModeHandler_Address();
       // 			break;
-      // 		case 0x75:
-      // 			// ADC zp,X
-      // 			ADCInstrHandler(ZeroPgXAddrModeHandler_Data());
-      // 			break;
+      case 0x75:
+        // ADC zp,X
+        ADCInstrHandler(ZeroPgXAddrModeHandler_Data());
+        break;
       // 		case 0x76:
       // 			// ROR zp,X
       // 			RORInstrHandler(ZeroPgXAddrModeHandler_Address());
@@ -1797,12 +1798,15 @@ export function Exec6502Instruction() {
         AdvanceCyclesForMemWrite();
         BEEBWRITEMEM_DIRECT(ZeroPgAddrModeHandler_Address(), XReg);
         break;
-      // 		case 0x87:
-      // 			// Undocumented instruction: SAX zp
-      // 			// This one does not seem to change the processor flags
-      // 			AdvanceCyclesForMemWrite();
-      // 			WholeRam[ZeroPgAddrModeHandler_Address()] = Accumulator & XReg;
-      // 			break;
+      case 0x87:
+        // Undocumented instruction: SAX zp
+        // This one does not seem to change the processor flags
+        AdvanceCyclesForMemWrite();
+        BEEBWRITEMEM_DIRECT(
+          ZeroPgAddrModeHandler_Address(),
+          Accumulator & XReg,
+        );
+        break;
       case 0x88:
         // DEY
         YReg = (YReg - 1) & 255;
@@ -2165,10 +2169,10 @@ export function Exec6502Instruction() {
       // 			// CMP zp,X
       // 			CMPInstrHandler(ZeroPgXAddrModeHandler_Data());
       // 			break;
-      // 		case 0xd6:
-      // 			// DEC zp,X
-      // 			DECInstrHandler(ZeroPgXAddrModeHandler_Address());
-      // 			break;
+      case 0xd6:
+        // DEC zp,X
+        DECInstrHandler(ZeroPgXAddrModeHandler_Address());
+        break;
       // 		case 0xd7: {
       // 				// Undocumented instruction: DCP zp,X
       // 				int ZeroPageAddress = ZeroPgXAddrModeHandler_Address();
@@ -2194,11 +2198,11 @@ export function Exec6502Instruction() {
       // 				CMPInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0xdc:
-      // 		case 0xfc:
-      // 			// Undocumented instruction: NOP abs,X
-      // 			AbsXAddrModeHandler_Data();
-      // 			break;
+      case 0xdc:
+      case 0xfc:
+        // Undocumented instruction: NOP abs,X
+        AbsXAddrModeHandler_Data();
+        break;
       case 0xdd:
         // CMP abs,X
         CMPInstrHandler(AbsXAddrModeHandler_Data());

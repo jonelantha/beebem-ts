@@ -1493,18 +1493,21 @@ export async function LoadSimpleDiscImage(
       DiscStore[DriveNum][Head][CurrentTrack].Gap3Size = 0;
       DiscStore[DriveNum][Head][CurrentTrack].Gap5Size = 0;
       for (let CurrentSector = 0; CurrentSector < 10; CurrentSector++) {
-        const SecPtr: SectorType = {
-          IDField: {
-            CylinderNum: CurrentTrack,
-            RecordNum: CurrentSector,
-            HeadNum: HeadNum,
-            PhysRecLength: 256,
-          },
-          Deleted: false,
-          Data: new Uint8Array(buffer, 256 * sectorNum, 256),
-        };
-        DiscStore[DriveNum][Head][CurrentTrack].Sectors.push(SecPtr);
-        sectorNum++;
+        const startPtr = 256 * sectorNum;
+        if (startPtr < buffer.byteLength) {
+          const SecPtr: SectorType = {
+            IDField: {
+              CylinderNum: CurrentTrack,
+              RecordNum: CurrentSector,
+              HeadNum: HeadNum,
+              PhysRecLength: 256,
+            },
+            Deleted: false,
+            Data: new Uint8Array(buffer, startPtr, 256),
+          };
+          DiscStore[DriveNum][Head][CurrentTrack].Sectors.push(SecPtr);
+          sectorNum++;
+        }
       }
     }
   }

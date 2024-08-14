@@ -55,6 +55,8 @@ export const getPrimaryContext = () =>
 // header
 
 let m_ShiftBooted = false;
+let m_KeyMapAS = false;
+export const set_m_KeyMapAS = (val: boolean) => (m_KeyMapAS = val);
 export const get_m_ShiftBooted = () => m_ShiftBooted;
 export const set_m_ShiftBooted = (val: boolean) => (m_ShiftBooted = val);
 let m_ShiftPressed = false;
@@ -169,23 +171,19 @@ export function TranslateKey(vkey: number, keyUp: boolean) {
   } // New key press - convert to beeb row + col
   else {
     const keyMapping = transTable[vkey][m_ShiftPressed ? 1 : 0];
-    const row = keyMapping.row;
-    const col = keyMapping.col;
+    let row = keyMapping.row;
+    let col = keyMapping.col;
     const needShift = keyMapping.shift;
-    // if (m_KeyMapAS)
-    // {
-    // 	// Map A & S to CAPS & CTRL - good for some games
-    // 	if (vkey == 65)
-    // 	{
-    // 		row = 4;
-    // 		col = 0;
-    // 	}
-    // 	else if (vkey == 83)
-    // 	{
-    // 		row = 0;
-    // 		col = 1;
-    // 	}
-    // }
+    if (m_KeyMapAS) {
+      // Map A & S to CAPS & CTRL - good for some games
+      if (vkey == 65) {
+        row = 4;
+        col = 0;
+      } else if (vkey == 83) {
+        row = 0;
+        col = 1;
+      }
+    }
     // 	if (m_KeyMapFunc)
     // 	{
     // 		// Map F1-F10 to f0-f9

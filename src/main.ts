@@ -20,7 +20,12 @@ Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 Boston, MA  02110-1301, USA.
 ****************************************************************/
 
-import { DoShiftBreak, Initialise, TranslateKey } from "./beebwin";
+import {
+  DoShiftBreak,
+  Initialise,
+  set_m_KeyMapAS,
+  TranslateKey,
+} from "./beebwin";
 import { Exec6502Instruction } from "./6502core";
 import { BeebReleaseAllKeys } from "./sysvia";
 
@@ -44,6 +49,8 @@ import "./style.css";
   window.removeEventListener("blur", () => BeebReleaseAllKeys());
 
   const params = new URLSearchParams(window.location.search);
+
+  set_m_KeyMapAS(Boolean(params.get("mapAS")));
 
   await Initialise();
 
