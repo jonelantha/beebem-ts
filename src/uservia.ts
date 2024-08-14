@@ -120,14 +120,12 @@ export function UserVIAWrite(Address: number, Value: number) {
 
     case 4:
     case 6:
-      throw "not impl";
       // DebugTrace("UserVia Reg4 Timer1 lo Counter Write val=0x%02x at %d\n", Value, TotalCycles);
       UserVIAState.timer1l &= 0xff00;
       UserVIAState.timer1l |= Value & 0xff;
       break;
 
     case 5:
-      throw "not impl";
       // DebugTrace("UserVia Reg5 Timer1 hi Counter Write val=0x%02x at %d\n", Value, TotalCycles);
       UserVIAState.timer1l &= 0xff;
       UserVIAState.timer1l |= Value << 8;
@@ -174,7 +172,6 @@ export function UserVIAWrite(Address: number, Value: number) {
       break;
 
     case 11:
-      throw "not impl";
       UserVIAState.acr = Value;
       UpdateSRState(false);
       break;
@@ -255,7 +252,6 @@ export function UserVIARead(Address: number) {
       break;
 
     case 8 /* Timer 2 lo counter */:
-      throw "not impl";
       if (UserVIAState.timer2c < 0)
         /* Adjust for dividing -ve count by 2 */
         tmp = ((UserVIAState.timer2c - 1) / 2) & 0xff;
@@ -265,7 +261,6 @@ export function UserVIARead(Address: number) {
       break;
 
     case 9 /* Timer 2 hi counter */:
-      throw "not impl";
       tmp = (UserVIAState.timer2c >> 9) & 0xff;
       break;
 
