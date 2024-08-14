@@ -517,9 +517,12 @@ export function SysVIARead(Address: number) {
     case 14:
       tmp = SysVIAState.ier | 0x80;
       break;
-    //     case 1:
-    //       SysVIAState.ifr&=0xfc;
-    //       UpdateIFRTopBit();
+    case 1:
+      SysVIAState.ifr &= 0xfc;
+      UpdateIFRTopBit();
+      /* slow data bus read */
+      tmp = SlowDataBusRead();
+      break;
     case 15:
       /* slow data bus read */
       tmp = SlowDataBusRead();

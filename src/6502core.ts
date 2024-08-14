@@ -1041,19 +1041,17 @@ function IndAddrModeHandler_Address() {
 
 /*-------------------------------------------------------------------------*/
 /* Zero page with Y offset addressing mode handler                         */
-// INLINE static int ZeroPgYAddrModeHandler_Data()
-// {
-// 	int EffectiveAddress = (ReadPaged(ProgramCounter++) + YReg) & 255;
-// 	return WholeRam[EffectiveAddress];
-// }
+function ZeroPgYAddrModeHandler_Data() {
+  const EffectiveAddress = (ReadPaged(ProgramCounter++) + YReg) & 255;
+  return BEEBREADMEM_DIRECT(EffectiveAddress);
+}
 
 /*-------------------------------------------------------------------------*/
 /* Zero page with Y offset addressing mode handler                         */
-// INLINE static int ZeroPgYAddrModeHandler_Address()
-// {
-//   int EffectiveAddress = (ReadPaged(ProgramCounter++) + YReg) & 255;
-//   return EffectiveAddress;
-// }
+function ZeroPgYAddrModeHandler_Address() {
+  const EffectiveAddress = (ReadPaged(ProgramCounter++) + YReg) & 255;
+  return EffectiveAddress;
+}
 
 /*-------------------------------------------------------------------------*/
 
@@ -1159,10 +1157,10 @@ export function Exec6502Instruction() {
         // BRK
         BRKInstrHandler();
         break;
-      // 		case 0x01:
-      // 			// ORA (zp,X)
-      // 			ORAInstrHandler(IndXAddrModeHandler_Data());
-      // 			break;
+      case 0x01:
+        // ORA (zp,X)
+        ORAInstrHandler(IndXAddrModeHandler_Data());
+        break;
       // 		case 0x02:
       // 		case 0x22:
       // 		case 0x42:
@@ -1446,10 +1444,10 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: NOP abs,x
       // 			AbsXAddrModeHandler_Data();
       // 			break;
-      // 		case 0x3d:
-      // 			// AND abs,X
-      // 			ANDInstrHandler(AbsXAddrModeHandler_Data());
-      // 			break;
+      case 0x3d:
+        // AND abs,X
+        ANDInstrHandler(AbsXAddrModeHandler_Data());
+        break;
       case 0x3e:
         // ROL abs,X
         ROLInstrHandler(AbsXAddrModeHandler_Address());
@@ -1558,10 +1556,10 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: NOP zp,X
       // 			ZeroPgXAddrModeHandler_Address();
       // 			break;
-      // 		case 0x55:
-      // 			// EOR zp,X
-      // 			EORInstrHandler(ZeroPgXAddrModeHandler_Data());
-      // 			break;
+      case 0x55:
+        // EOR zp,X
+        EORInstrHandler(ZeroPgXAddrModeHandler_Data());
+        break;
       // 		case 0x56:
       // 			// LSR zp,X
       // 			LSRInstrHandler(ZeroPgXAddrModeHandler_Address());
@@ -1876,13 +1874,11 @@ export function Exec6502Instruction() {
         AdvanceCyclesForMemWrite();
         WritePaged(ZeroPgXAddrModeHandler_Address(), Accumulator);
         break;
-      //case 0x96:
-      // STX zp,X
-      // console.log(getInstCount());
-      // throw "not impl";
-      // AdvanceCyclesForMemWrite();
-      // STXInstrHandler(ZeroPgYAddrModeHandler_Address());
-      //break;
+      case 0x96:
+        //STX zp,X
+        AdvanceCyclesForMemWrite();
+        STXInstrHandler(ZeroPgYAddrModeHandler_Address());
+        break;
       // 		case 0x97:
       // 			// Undocumented instruction: SAX zp,Y
       // 			AdvanceCyclesForMemWrite();
@@ -2026,10 +2022,10 @@ export function Exec6502Instruction() {
         // LDA zp,X
         LDAInstrHandler(ZeroPgXAddrModeHandler_Data());
         break;
-      // 		case 0xb6:
-      // 			// LDX zp,Y
-      // 			LDXInstrHandler(ZeroPgYAddrModeHandler_Data());
-      // 			break;
+      case 0xb6:
+        // LDX zp,Y
+        LDXInstrHandler(ZeroPgYAddrModeHandler_Data());
+        break;
       // 		case 0xb7:
       // 			// Undocumented instruction: LAX zp,Y
       // 			LDXInstrHandler(ZeroPgYAddrModeHandler_Data());
@@ -2305,10 +2301,10 @@ export function Exec6502Instruction() {
       // 				SBCInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0xf5:
-      // 			// SBC zp,X
-      // 			SBCInstrHandler(ZeroPgXAddrModeHandler_Data());
-      // 			break;
+      case 0xf5:
+        // SBC zp,X
+        SBCInstrHandler(ZeroPgXAddrModeHandler_Data());
+        break;
       case 0xf6:
         // INC zp,X
         INCInstrHandler(ZeroPgXAddrModeHandler_Address());
