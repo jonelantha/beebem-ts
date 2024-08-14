@@ -472,14 +472,12 @@ export function SysVIARead(Address: number) {
     //     case 3:
     //       tmp = SysVIAState.ddra;
     //       break;
-    //     case 4: /* Timer 1 lo counter */
-    //       if (SysVIAState.timer1c < 0)
-    //         tmp=0xff;
-    //       else
-    //         tmp=(SysVIAState.timer1c / 2) & 0xff;
-    //       SysVIAState.ifr&=0xbf; /* Clear bit 6 - timer 1 */
-    //       UpdateIFRTopBit();
-    //       break;
+    case 4 /* Timer 1 lo counter */:
+      if (SysVIAState.timer1c < 0) tmp = 0xff;
+      else tmp = (SysVIAState.timer1c / 2) & 0xff;
+      SysVIAState.ifr &= 0xbf; /* Clear bit 6 - timer 1 */
+      UpdateIFRTopBit();
+      break;
     //     case 5: /* Timer 1 hi counter */
     //       tmp=(SysVIAState.timer1c>>9) & 0xff; //K.Lowe
     //       break;

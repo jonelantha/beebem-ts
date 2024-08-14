@@ -83,8 +83,7 @@ export function BeebMemPtrWithWrap(
   Address: number,
   Length: number,
 ): Uint8Array {
-  // static unsigned char tmpBuf[1024];
-  // unsigned char *tmpBufPtr;
+  if (Length === 0) return new Uint8Array(1024);
 
   Address = WrapAddr(Address);
   const EndAddress = WrapAddr(Address + Length - 1);
@@ -93,25 +92,28 @@ export function BeebMemPtrWithWrap(
     return new Uint8Array(WholeRam.buffer, Address, Length);
   }
 
-  throw "not impl";
+  const tmpBuf = new Uint8Array(Length);
 
-  // int toCopy = 0x8000 - Address;
+  let toCopy = 0x8000 - Address;
 
-  // if (toCopy > Length) toCopy = Length;
+  if (toCopy > Length) toCopy = Length;
 
-  // if (toCopy > 0) {
-  //   memcpy(tmpBuf, WholeRam + Address, toCopy);
-  // }
+  const firstPart = WholeRam.slice(Address, Address + toCopy);
+  if (toCopy > 0) {
+    tmpBuf.set(firstPart);
+  }
 
-  // tmpBufPtr = tmpBuf + toCopy;
-  // toCopy = Length - toCopy;
+  const tmpBufPtr = toCopy;
+  toCopy = Length - toCopy;
 
-  // if (toCopy > 0) {
-  //   memcpy(tmpBufPtr, WholeRam + EndAddress - (toCopy - 1), toCopy);
-  // }
+  const secondPart = WholeRam.slice(EndAddress - (toCopy - 1), EndAddress + 1);
 
-  // // Tripling is for Shadow RAM handling
-  // return tmpBuf;
+  if (toCopy > 0) {
+    tmpBuf.set(secondPart, tmpBufPtr);
+  }
+
+  // Tripling is for Shadow RAM handling
+  return tmpBuf;
 }
 
 /*----------------------------------------------------------------------------*/

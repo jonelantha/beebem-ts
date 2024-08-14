@@ -401,30 +401,39 @@ function ADCInstrHandler(operand: number) {
       Accumulator & 128 ? 128 : 0,
     );
   } else {
-    throw "not impl";
     /* Z flag determined from 2's compl result, not BCD result! */
-    // int TmpResult = Accumulator + operand + GETCFLAG;
-    // int ZFlag = (TmpResult & 0xff) == 0;
-    // int ln = (Accumulator & 0xf) + (operand & 0xf) + GETCFLAG;
-    // int TmpCarry = 0;
-    // if (ln > 9) {
-    //   ln += 6;
-    //   ln &= 0xf;
-    //   TmpCarry = 0x10;
-    // }
-    // int hn = (Accumulator & 0xf0) + (operand & 0xf0) + TmpCarry;
-    // /* N and V flags are determined before high nibble is adjusted.
-    //    NOTE: V is not always correct */
-    // int NFlag = hn & 128;
-    // int VFlag = (hn ^ Accumulator) & 128 && !((Accumulator ^ operand) & 128);
-    // int CFlag = 0;
-    // if (hn > 0x90) {
-    //   hn += 0x60;
-    //   hn &= 0xf0;
-    //   CFlag = 1;
-    // }
-    // Accumulator = hn | ln;
-    // SetPSR(FlagC | FlagZ | FlagV | FlagN, CFlag, ZFlag, 0, 0, 0, VFlag, NFlag);
+    const TmpResult = Accumulator + operand + (GETCFLAG() ? 1 : 0);
+    const ZFlag = (TmpResult & 0xff) == 0;
+    let ln = (Accumulator & 0xf) + (operand & 0xf) + (GETCFLAG() ? 1 : 0);
+    let TmpCarry = 0;
+    if (ln > 9) {
+      ln += 6;
+      ln &= 0xf;
+      TmpCarry = 0x10;
+    }
+    let hn = (Accumulator & 0xf0) + (operand & 0xf0) + TmpCarry;
+    /* N and V flags are determined before high nibble is adjusted.
+       NOTE: V is not always correct */
+    const NFlag = hn & 128;
+    const VFlag =
+      ((hn ^ Accumulator) & 128) > 0 && !((Accumulator ^ operand) & 128);
+    let CFlag: 0 | 1 = 0;
+    if (hn > 0x90) {
+      hn += 0x60;
+      hn &= 0xf0;
+      CFlag = 1;
+    }
+    Accumulator = hn | ln;
+    SetPSR(
+      FlagC | FlagZ | FlagV | FlagN,
+      CFlag,
+      ZFlag ? 1 : 0,
+      0,
+      0,
+      0,
+      VFlag ? 1 : 0,
+      NFlag ? 128 : 0,
+    );
   }
 } /* ADCInstrHandler */
 
@@ -769,35 +778,46 @@ function SBCInstrHandler(operand: number) {
       Accumulator & 128 ? 128 : 0,
     );
   } else {
-    throw "not impl";
     /* Z flag determined from 2's compl result, not BCD result! */
-    // int TmpResult = Accumulator - operand - (1 - GETCFLAG);
-    // int ZFlag = ((TmpResult & 0xff) == 0);
-    // int ohn = operand & 0xf0;
-    // int oln = operand & 0xf;
-    // int ln = (Accumulator & 0xf) - oln - (1 - GETCFLAG);
-    // if (ln & 0x10) {
-    // ln -= 6;
-    // }
-    // int TmpCarry = 0;
-    // if (ln & 0x20) {
-    // TmpCarry = 0x10;
-    // }
-    // ln &= 0xf;
-    // int hn = (Accumulator & 0xf0) - ohn - TmpCarry;
-    // /* N and V flags are determined before high nibble is adjusted.
-    //     NOTE: V is not always correct */
-    // int NFlag = hn & 128;
-    // int TmpResultV = (signed char)Accumulator - (signed char)operand - (1 - GETCFLAG);
-    // int VFlag = ((TmpResultV < -128) || (TmpResultV > 127));
-    // int CFlag = 1;
-    // if (hn & 0x100) {
-    // hn -= 0x60;
-    // hn &= 0xf0;
-    // CFlag = 0;
-    // }
-    // Accumulator = hn | ln;
-    // SetPSR(FlagC | FlagZ | FlagV | FlagN, CFlag, ZFlag, 0, 0, 0, VFlag, NFlag);
+    const TmpResult = Accumulator - operand - (1 - (GETCFLAG() ? 1 : 0));
+    const ZFlag = (TmpResult & 0xff) == 0;
+    const ohn = operand & 0xf0;
+    const oln = operand & 0xf;
+    let ln = (Accumulator & 0xf) - oln - (1 - (GETCFLAG() ? 1 : 0));
+    if (ln & 0x10) {
+      ln -= 6;
+    }
+    let TmpCarry = 0;
+    if (ln & 0x20) {
+      TmpCarry = 0x10;
+    }
+    ln &= 0xf;
+    let hn = (Accumulator & 0xf0) - ohn - TmpCarry;
+    /* N and V flags are determined before high nibble is adjusted.
+        NOTE: V is not always correct */
+    const NFlag = hn & 128;
+    const TmpResultV =
+      charToSignedChar(Accumulator) -
+      charToSignedChar(operand) -
+      (1 - (GETCFLAG() ? 1 : 0));
+    const VFlag = TmpResultV < -128 || TmpResultV > 127;
+    let CFlag: 0 | 1 = 1;
+    if (hn & 0x100) {
+      hn -= 0x60;
+      hn &= 0xf0;
+      CFlag = 0;
+    }
+    Accumulator = hn | ln;
+    SetPSR(
+      FlagC | FlagZ | FlagV | FlagN,
+      CFlag,
+      ZFlag ? 1 : 0,
+      0,
+      0,
+      0,
+      VFlag ? 1 : 0,
+      NFlag ? 128 : 0,
+    );
   }
 } /* SBCInstrHandler */
 
@@ -1187,13 +1207,13 @@ export function Exec6502Instruction() {
         // ASL A
         ASLInstrHandler_Acc();
         break;
-      // 		case 0x0b:
-      // 		case 0x2b:
-      // 			// Undocumented instruction: ANC imm
-      // 			ANDInstrHandler(ReadPaged(ProgramCounter++));
-      // 			PSR &= ~FlagC;
-      // 			PSR |= ((Accumulator & 128) >> 7);
-      // 			break;
+      case 0x0b:
+      case 0x2b:
+        // Undocumented instruction: ANC imm
+        ANDInstrHandler(ReadPaged(ProgramCounter++));
+        PSR &= ~FlagC;
+        PSR |= (Accumulator & 128) >> 7;
+        break;
       // 		case 0x0c:
       // 			// Undocumented instruction: NOP abs
       // 			AbsAddrModeHandler_Address();
@@ -2295,10 +2315,10 @@ export function Exec6502Instruction() {
       // 				SBCInstrHandler(WholeRam[ZeroPageAddress]);
       // 			}
       // 			break;
-      // 		case 0xf8:
-      // 			// SED
-      // 			PSR |= FlagD;
-      // 			break;
+      case 0xf8:
+        // SED
+        PSR |= FlagD;
+        break;
       case 0xf9:
         // SBC abs,Y
         SBCInstrHandler(AbsYAddrModeHandler_Data());
