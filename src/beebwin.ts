@@ -34,7 +34,7 @@ import { AtoDInit } from "./atodconv";
 import { BeebMemInit } from "./beebmem";
 import { bufferHeight, bufferWidth, InitSurfaces } from "./beebwindx";
 import { KeyMap, KeyMapping, REAL_TIME_TARGET } from "./beebwinh";
-import { Disc8271Reset, FreeDiscImage } from "./disc8271";
+import { Disc8271Reset, FreeDiscImage, LoadSimpleDiscImage } from "./disc8271";
 import { defaultKeymapData, logicalKeymapData } from "./keymap";
 import { BeebKeyDown, BeebKeyUp, SysVIAReset } from "./sysvia";
 import { UserVIAReset } from "./uservia";
@@ -54,6 +54,9 @@ export const getPrimaryContext = () =>
 
 // header
 
+let m_ShiftBooted = false;
+export const get_m_ShiftBooted = () => m_ShiftBooted;
+export const set_m_ShiftBooted = (val: boolean) => (m_ShiftBooted = val);
 let m_ShiftPressed = false;
 const m_vkeyPressed = Array.from({ length: 256 }, () => ({
   row: -1,
@@ -91,12 +94,15 @@ async function ApplyPrefs() {
 
   InitSurfaces();
 
-  await ResetBeebSystem(true);
+  await ResetBeebSystem(true, undefined);
 }
 
 /****************************************************************************/
 
-async function ResetBeebSystem(LoadRoms: boolean) {
+async function ResetBeebSystem(
+  LoadRoms: boolean,
+  discImage: string | undefined,
+) {
   // SoundReset();
   // SoundInit();
   // SwitchOnSound();
@@ -108,9 +114,13 @@ async function ResetBeebSystem(LoadRoms: boolean) {
   VideoInit();
   Disc8271Reset();
   AtoDInit();
+
   FreeDiscImage(0);
   // Keep the disc images loaded
   FreeDiscImage(1);
+
+  // 8271 disc
+  if (discImage) await LoadSimpleDiscImage(discImage, 0, 0, 80);
 }
 
 /****************************************************************************/
@@ -129,9 +139,11 @@ export function CreateBeebWindow() {
 
 /****************************************************************************/
 export function TranslateKey(vkey: number, keyUp: boolean) {
-  //left 90, right 88
-  // up shift 186 down 191
-  // returns row
+  if (m_ShiftBooted && !keyUp) {
+    m_ShiftBooted = false;
+    BeebKeyUp(0, 0);
+  }
+
   if (vkey < 0 || vkey > 255) return -9;
 
   // Key track of shift state
@@ -332,4 +344,11 @@ function ReadKeyMap(rawKeymap: number[][]): KeyMap {
   }
 
   return keymap;
+}
+
+export async function DoShiftBreak(discImage: string) {
+  // Do a shift + break
+  await ResetBeebSystem(false, discImage);
+  BeebKeyDown(0, 0); // Shift key
+  m_ShiftBooted = true;
 }

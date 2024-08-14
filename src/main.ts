@@ -20,10 +20,9 @@ Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 Boston, MA  02110-1301, USA.
 ****************************************************************/
 
-import { Initialise, TranslateKey } from "./beebwin";
+import { DoShiftBreak, Initialise, TranslateKey } from "./beebwin";
 import { Exec6502Instruction } from "./6502core";
 import { BeebReleaseAllKeys } from "./sysvia";
-import { LoadSimpleDiscImage } from "./disc8271";
 
 import "./style.css";
 
@@ -50,7 +49,7 @@ import "./style.css";
 
   const discImage = params.get("disc") ?? "";
 
-  discImage && (await LoadSimpleDiscImage(discImage, 0, 0, 80));
+  discImage && (await DoShiftBreak(discImage));
 
   while (true) {
     const sleepTime = Exec6502Instruction();

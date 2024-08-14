@@ -34,6 +34,8 @@ import {
   SetNMIStatus,
   SetTrigger,
 } from "./6502core";
+import { get_m_ShiftBooted, set_m_ShiftBooted } from "./beebwin";
+import { BeebKeyUp } from "./sysvia";
 
 // header
 
@@ -507,10 +509,10 @@ function DoVarLength_ReadDataCommand() {
   }
 
   // Reset shift state if it was set by Run Disc
-  // if (mainWin->m_ShiftBooted) {
-  //   mainWin->m_ShiftBooted = false;
-  //   BeebKeyUp(0, 0);
-  // }
+  if (get_m_ShiftBooted()) {
+    set_m_ShiftBooted(false);
+    BeebKeyUp(0, 0);
+  }
 
   Internal_CurrentTrack[Drive] = Params[0];
   CommandStatus.CurrentTrackPtr = GetTrackPtr(Params[0]);
