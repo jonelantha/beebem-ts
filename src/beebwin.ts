@@ -87,7 +87,7 @@ export async function Initialise() {
 async function ApplyPrefs() {
   defaultMapping = ReadKeyMap(defaultKeymapData);
   logicalMapping = ReadKeyMap(logicalKeymapData);
-  transTable = logicalMapping;
+  transTable = defaultMapping;
 
   InitSurfaces();
 
@@ -129,6 +129,8 @@ export function CreateBeebWindow() {
 
 /****************************************************************************/
 export function TranslateKey(vkey: number, keyUp: boolean) {
+  //left 90, right 88
+  // up shift 186 down 191
   // returns row
   if (vkey < 0 || vkey > 255) return -9;
 
