@@ -319,17 +319,17 @@ function SetPSR(
   d: 0 | 1,
   b: 0 | 1,
   v: 0 | 1,
-  n: 0 | 128,
+  n: 0 | 1,
 ) {
   PSR &= ~mask;
-  PSR |= c | (z << 1) | (i << 2) | (d << 3) | (b << 4) | (v << 6) | n;
+  PSR |= c | (z << 1) | (i << 2) | (d << 3) | (b << 4) | (v << 6) | (n << 7);
 } /* SetPSR */
 
 /*----------------------------------------------------------------------------*/
 /* NOTE!!!!! n is 128 or 0 - not 1 or 0                                       */
-function SetPSRCZN(c: 1 | 0, z: 1 | 0, n: 128 | 0) {
+function SetPSRCZN(c: 1 | 0, z: 1 | 0, n: 1 | 0) {
   PSR &= ~(FlagC | FlagZ | FlagN);
-  PSR |= c | (z << 1) | n;
+  PSR |= c | (z << 1) | (n << 7);
 } /* SetPSRCZN */
 
 /*----------------------------------------------------------------------------*/
@@ -398,7 +398,7 @@ function ADCInstrHandler(operand: number) {
       0,
       0,
       ((Accumulator & 128) > 0 ? 1 : 0) ^ (TmpResultV < 0 ? 1 : 0) ? 1 : 0,
-      Accumulator & 128 ? 128 : 0,
+      Accumulator & 128 ? 1 : 0,
     );
   } else {
     /* Z flag determined from 2's compl result, not BCD result! */
@@ -432,7 +432,7 @@ function ADCInstrHandler(operand: number) {
       0,
       0,
       VFlag ? 1 : 0,
-      NFlag ? 128 : 0,
+      NFlag ? 1 : 0,
     );
   }
 } /* ADCInstrHandler */
@@ -463,7 +463,7 @@ function ASLInstrHandler(address: number) {
   SetPSRCZN(
     (oldVal & 128) > 0 ? 1 : 0,
     newVal == 0 ? 1 : 0,
-    newVal & 128 ? 128 : 0,
+    newVal & 128 ? 1 : 0,
   );
 } /* ASLInstrHandler */
 
@@ -476,7 +476,7 @@ function ASLInstrHandler_Acc() {
   SetPSRCZN(
     (oldVal & 128) > 0 ? 1 : 0,
     newVal == 0 ? 1 : 0,
-    newVal & 128 ? 128 : 0,
+    newVal & 128 ? 1 : 0,
   );
 } /* ASLInstrHandler_Acc */
 
@@ -561,7 +561,7 @@ function CMPInstrHandler(operand: number) {
   const result = charToUnsignedChar(Accumulator - operand);
   let CFlag: 0 | 1 = 0;
   if (Accumulator >= operand) CFlag = FlagC;
-  SetPSRCZN(CFlag, Accumulator == operand ? 1 : 0, result & 128 ? 128 : 0);
+  SetPSRCZN(CFlag, Accumulator == operand ? 1 : 0, result & 128 ? 1 : 0);
 }
 
 /**
@@ -572,7 +572,7 @@ function CPXInstrHandler(operand: number) {
   SetPSRCZN(
     XReg >= operand ? 1 : 0,
     XReg == operand ? 1 : 0,
-    result & 128 ? 128 : 0,
+    result & 128 ? 1 : 0,
   );
 }
 
@@ -584,7 +584,7 @@ function CPYInstrHandler(operand: number) {
   SetPSRCZN(
     YReg >= operand ? 1 : 0,
     YReg == operand ? 1 : 0,
-    result & 128 ? 128 : 0,
+    result & 128 ? 1 : 0,
   );
 }
 
@@ -713,7 +713,7 @@ function ROLInstrHandler(address: number) {
   SetPSRCZN(
     (oldVal & 128) > 0 ? 1 : 0,
     newVal == 0 ? 1 : 0,
-    newVal & 128 ? 128 : 0,
+    newVal & 128 ? 1 : 0,
   );
 }
 
@@ -725,7 +725,7 @@ function ROLInstrHandler_Acc() {
   SetPSRCZN(
     (oldVal & 128) > 0 ? 1 : 0,
     newVal == 0 ? 1 : 0,
-    newVal & 128 ? 128 : 0,
+    newVal & 128 ? 1 : 0,
   );
 } /* ROLInstrHandler_Acc */
 
@@ -742,7 +742,7 @@ function RORInstrHandler(address: number) {
   Cycles += CyclesToMemWrite[CurrentInstruction] - 1;
   PollVIAs(CyclesToMemWrite[CurrentInstruction] - 1);
   WritePaged(address, newVal);
-  SetPSRCZN(oldVal & 1 ? 1 : 0, newVal == 0 ? 1 : 0, newVal & 128 ? 128 : 0);
+  SetPSRCZN(oldVal & 1 ? 1 : 0, newVal == 0 ? 1 : 0, newVal & 128 ? 1 : 0);
 }
 
 function RORInstrHandler_Acc() {
@@ -750,7 +750,7 @@ function RORInstrHandler_Acc() {
   let newVal = /*(unsigned int)*/ (oldVal >> 1) & 127;
   newVal += (GETCFLAG() ? 1 : 0) * 128;
   Accumulator = newVal;
-  SetPSRCZN(oldVal & 1 ? 1 : 0, newVal == 0 ? 1 : 0, newVal & 128 ? 128 : 0);
+  SetPSRCZN(oldVal & 1 ? 1 : 0, newVal == 0 ? 1 : 0, newVal & 128 ? 1 : 0);
 }
 
 /**
@@ -775,7 +775,7 @@ function SBCInstrHandler(operand: number) {
       ((Accumulator & 128) > 0 ? 1 : 0) ^ ((TmpResultV & 256) != 0 ? 1 : 0)
         ? 1
         : 0,
-      Accumulator & 128 ? 128 : 0,
+      Accumulator & 128 ? 1 : 0,
     );
   } else {
     /* Z flag determined from 2's compl result, not BCD result! */
@@ -816,7 +816,7 @@ function SBCInstrHandler(operand: number) {
       0,
       0,
       VFlag ? 1 : 0,
-      NFlag ? 128 : 0,
+      NFlag ? 1 : 0,
     );
   }
 } /* SBCInstrHandler */
