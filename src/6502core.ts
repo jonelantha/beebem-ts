@@ -2161,10 +2161,10 @@ export function Exec6502Instruction() {
       // 				CMPInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0xd5:
-      // 			// CMP zp,X
-      // 			CMPInstrHandler(ZeroPgXAddrModeHandler_Data());
-      // 			break;
+      case 0xd5:
+        // CMP zp,X
+        CMPInstrHandler(ZeroPgXAddrModeHandler_Data());
+        break;
       case 0xd6:
         // DEC zp,X
         DECInstrHandler(ZeroPgXAddrModeHandler_Address());

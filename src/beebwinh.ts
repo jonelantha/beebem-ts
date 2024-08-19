@@ -114,7 +114,7 @@ export function GetLinePtr(y: number) {
 
 export function write8UChars(vidPtr: number, eightUChars: EightUChars) {
   const screen = getScreen();
-
+  if (!eightUChars) throw "err";
   for (let i = 0; i < 8; i++) {
     screen[vidPtr++] = eightUChars[i];
   }
