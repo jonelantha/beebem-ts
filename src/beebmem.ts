@@ -30,13 +30,15 @@ import { AdjustForIORead, AdjustForIOWrite, SyncIO } from "./6502core";
 import { AtoDRead, AtoDWrite } from "./atodconv";
 import { Disc8271Read, Disc8271Write } from "./disc8271";
 import {
+  SerialACIAReadRxData,
   SerialACIAReadStatus,
   SerialACIAWriteControl,
+  SerialULARead,
   SerialULAWrite,
 } from "./serial";
 import { getIC32State, SysVIARead, SysVIAWrite } from "./sysvia";
 import { UserVIARead, UserVIAWrite } from "./uservia";
-import { CRTCWrite, VideoULARead, VideoULAWrite } from "./video";
+import { CRTCRead, CRTCWrite, VideoULARead, VideoULAWrite } from "./video";
 
 export function BEEBREADMEM_DIRECT(Address: number) {
   return WholeRam[Address];
@@ -181,9 +183,8 @@ export function BeebReadMem(Address: number) {
   /* IO space */
 
   if (Address >= 0xfc00 && Address < 0xfe00) {
-    throw "not impl";
-    // SyncIO();
-    // AdjustForIORead();
+    SyncIO();
+    AdjustForIORead();
   }
 
   /* VIAs first - games seem to do really heavy reading of these */
@@ -203,11 +204,10 @@ export function BeebReadMem(Address: number) {
   }
 
   if ((Address & ~7) == 0xfe00) {
-    throw "not impl";
-    // SyncIO();
-    // Value = CRTCRead(Address & 0x7);
-    // AdjustForIORead();
-    // return Value;
+    SyncIO();
+    Value = CRTCRead(Address & 0x7);
+    AdjustForIORead();
+    return Value;
   }
 
   if (Address == 0xfe08) {
@@ -218,19 +218,17 @@ export function BeebReadMem(Address: number) {
   }
 
   if (Address == 0xfe09) {
-    throw "not impl";
-    // SyncIO();
-    // Value = SerialACIAReadRxData();
-    // AdjustForIORead();
-    // return Value;
+    SyncIO();
+    Value = SerialACIAReadRxData();
+    AdjustForIORead();
+    return Value;
   }
 
   if (Address == 0xfe10) {
-    throw "not impl";
-    // SyncIO();
-    // Value = SerialULARead();
-    // AdjustForIORead();
-    // return Value;
+    SyncIO();
+    Value = SerialULARead();
+    AdjustForIORead();
+    return Value;
   }
 
   if ((Address & ~3) == 0xfe20) {

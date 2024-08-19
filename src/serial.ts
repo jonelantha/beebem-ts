@@ -63,8 +63,10 @@ const MC6850_CONTROL_RIE = 0x80;
 // static bool CassetteRelay = false; // Cassette Relay state
 // static SerialDevice SerialChannel = SerialDevice::Cassette; // Device in use
 
-// static unsigned char RDR, TDR; // Receive and Transmit Data Registers
-// static unsigned char RDSR, TDSR; // Receive and Transmit Data Shift Registers (buffers)
+let RDR = 0,
+  TDR = 0; // static unsigned char Receive and Transmit Data Registers
+let RDSR = 0,
+  TDSR = 0; // // static unsigned char Receive and Transmit Data Shift Registers (buffers)
 // unsigned int Tx_Rate = 1200; // Transmit baud rate
 // unsigned int Rx_Rate = 1200; // Recieve baud rate
 // unsigned char Clk_Divide = 1; // Clock divide rate
@@ -81,11 +83,12 @@ let DCDI = true;
 // static unsigned char DCDClear = 0; // count to clear DCD bit
 
 // static unsigned char Parity, StopBits, DataBits;
+let DataBits = 0; //unsigned char
 
-// bool RIE; // Receive Interrupt Enable
+let RIE = false; // Receive Interrupt Enable
 // bool TIE; // Transmit Interrupt Enable
 
-// unsigned char RxD; // Receive destination (data or shift register)
+let RxD = 0; // unsigned char Receive destination (data or shift register)
 
 // static UEFFileWriter UEFWriter;
 // static char TapeFileName[256]; // Filename of current tape file
@@ -259,15 +262,14 @@ export function SerialULAWrite(Value: number) {
   // Rx_Rate = Baud_Rates[(Value & 0x38) >> 3];
 }
 
-// unsigned char SerialULARead()
-// {
-// 	if (DebugEnabled)
-// 	{
-// 		DebugDisplayTraceF(DebugType::Serial, "Serial: Read serial ULA %02X", (int)SerialULAControl);
-// 	}
+export function SerialULARead() {
+  // if (DebugEnabled)
+  // {
+  // 	DebugDisplayTraceF(DebugType::Serial, "Serial: Read serial ULA %02X", (int)SerialULAControl);
+  // }
 
-// 	return SerialULAControl;
-// }
+  return SerialULAControl;
+}
 
 export function SerialACIAReadStatus() {
   if (!DCDI && DCD) {
@@ -324,55 +326,52 @@ export function SerialACIAReadStatus() {
 // 	}
 // }
 
-// unsigned char SerialACIAReadRxData()
-// {
-// //	if (!DCDI && DCD)
-// //	{
-// //		DCDClear++;
-// //		if (DCDClear > 1) {
-// //			DCD = false;
-// //			ACIA_Status &= ~(1 << MC6850_STATUS_DCS);
-// //			DCDClear = 0;
-// //		}
-// //	}
+export function SerialACIAReadRxData() {
+  //	if (!DCDI && DCD)
+  //	{
+  //		DCDClear++;
+  //		if (DCDClear > 1) {
+  //			DCD = false;
+  //			ACIA_Status &= ~(1 << MC6850_STATUS_DCS);
+  //			DCDClear = 0;
+  //		}
+  //	}
 
-// 	ACIA_Status &= ~MC6850_STATUS_IRQ;
-// 	intStatus &= ~(1 << serial);
+  ACIA_Status &= ~MC6850_STATUS_IRQ;
+  //intStatus &= ~(1 << serial);
 
-// 	unsigned char Data = RDR;
-// 	RDR = RDSR;
-// 	RDSR = 0;
+  let Data = RDR;
+  RDR = RDSR;
+  RDSR = 0;
 
-// 	if (RxD > 0)
-// 	{
-// 		RxD--;
-// 	}
+  if (RxD > 0) {
+    throw "not impl";
+    //RxD--;
+  }
 
-// 	if (RxD == 0)
-// 	{
-// 		ACIA_Status &= ~MC6850_STATUS_RDRF;
-// 	}
+  if (RxD == 0) {
+    ACIA_Status &= ~MC6850_STATUS_RDRF;
+  }
 
-// 	if (RxD > 0 && RIE)
-// 	{
-// 		ACIA_Status |= MC6850_STATUS_IRQ;
-// 		intStatus |= 1 << serial;
-// 	}
+  if (RxD > 0 && RIE) {
+    throw "not impl";
+    // ACIA_Status |= MC6850_STATUS_IRQ;
+    // intStatus |= 1 << serial;
+  }
 
-// 	if (DataBits == 7)
-// 	{
-// 		Data &= 127;
-// 	}
+  if (DataBits == 7) {
+    Data &= 127;
+  }
 
-// 	if (DebugEnabled)
-// 	{
-// 		DebugDisplayTraceF(DebugType::Serial, "Serial: Read ACIA Rx %02X", (int)Data);
-// 	}
+  // if (DebugEnabled)
+  // {
+  // 	DebugDisplayTraceF(DebugType::Serial, "Serial: Read ACIA Rx %02X", (int)Data);
+  // }
 
-// 	// WriteLog("Serial: Read ACIA Rx %02X, ACIA_Status = %02x\n", (int)Data, (int)ACIA_Status);
+  // WriteLog("Serial: Read ACIA Rx %02X, ACIA_Status = %02x\n", (int)Data, (int)ACIA_Status);
 
-// 	return Data;
-// }
+  return Data;
+}
 
 export function SerialPoll() {
   // 	if (SerialChannel == SerialDevice::Cassette)

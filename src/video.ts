@@ -1440,6 +1440,43 @@ export function CRTCWrite(Address: number, Value: number) {
 }
 
 /*-------------------------------------------------------------------------------------------------------------*/
+
+/**
+ * @param Address int
+ * @returns
+ */
+export function CRTCRead(Address: number) {
+  if (Address & 1) {
+    switch (CRTCControlReg) {
+      case 12:
+        throw "not impl";
+        return CRTC_ScreenStartHigh;
+      case 13:
+        throw "not impl";
+        return CRTC_ScreenStartLow;
+      case 14:
+        throw "not impl";
+        return CRTC_CursorPosHigh;
+      case 15:
+        return CRTC_CursorPosLow;
+      case 16:
+        throw "not impl";
+      //return CRTC_LightPenHigh;
+      case 17:
+        throw "not impl";
+      //return CRTC_LightPenLow;
+      default:
+        break;
+    }
+  } else {
+    // Rockwell part has bits 5,6,7 used - bit 6 is set when LPEN is received, bit 5 when in vertical retrace
+    return 0;
+  }
+
+  return 0; // Keeep MSVC happy $NRM
+}
+
+/*-------------------------------------------------------------------------------------------------------------*/
 export function VideoULAWrite(Address: number, Value: number) {
   if (Address & 1) {
     VideoULA_Palette[(Value & 0xf0) >> 4] = (Value & 0xf) ^ 7;

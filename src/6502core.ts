@@ -1312,10 +1312,10 @@ export function Exec6502Instruction() {
         // JSR abs
         JSRInstrHandler(AbsAddrModeHandler_Address());
         break;
-      // 		case 0x21:
-      // 			// AND (zp,X)
-      // 			ANDInstrHandler(IndXAddrModeHandler_Data());
-      // 			break;
+      case 0x21:
+        // AND (zp,X)
+        ANDInstrHandler(IndXAddrModeHandler_Data());
+        break;
       // 		case 0x23: {
       // 				// Undocumented instruction: RLA (zp,X)
       // 				int Address = IndXAddrModeHandler_Address();

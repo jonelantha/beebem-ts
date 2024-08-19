@@ -221,7 +221,6 @@ export function UserVIARead(Address: number) {
       break;
 
     case 3:
-      throw "not impl";
       tmp = UserVIAState.ddra;
       break;
 
@@ -237,12 +236,10 @@ export function UserVIARead(Address: number) {
       break;
 
     case 6 /* Timer 1 lo latch */:
-      throw "not impl";
       tmp = UserVIAState.timer1l & 0xff;
       break;
 
     case 7 /* Timer 1 hi latch */:
-      throw "not impl";
       tmp = (UserVIAState.timer1l >> 8) & 0xff;
       break;
 
@@ -260,13 +257,11 @@ export function UserVIARead(Address: number) {
       break;
 
     case 10:
-      throw "not impl";
       tmp = UserVIAState.sr;
       UpdateSRState(true);
       break;
 
     case 11:
-      throw "not impl";
       tmp = UserVIAState.acr;
       break;
 
@@ -288,7 +283,6 @@ export function UserVIARead(Address: number) {
       UserVIAState.ifr &= 0xfc;
       UpdateIFRTopBit();
     case 15:
-      throw "not impl";
       tmp = 255;
       break;
   }
@@ -414,7 +408,6 @@ function UpdateSRState(SRrw: boolean) {
   }
 
   if (SRrw) {
-    throw "not impl";
     if (UserVIAState.ifr & 0x04) {
       UserVIAState.ifr &= 0xfb;
       UpdateIFRTopBit();
