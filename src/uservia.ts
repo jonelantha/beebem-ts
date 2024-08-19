@@ -217,7 +217,6 @@ export function UserVIARead(Address: number) {
       break;
 
     case 2:
-      throw "not impl";
       tmp = UserVIAState.ddrb;
       break;
 
