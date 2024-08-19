@@ -2408,7 +2408,7 @@ export function Exec6502Instruction() {
     }
     OldNMIStatus = NMIStatus;
 
-    if (sleepTime) return sleepTime;
+    if (sleepTime !== undefined) return sleepTime;
   }
 }
 

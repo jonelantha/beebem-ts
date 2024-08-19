@@ -251,9 +251,9 @@ function ResetTiming() {
 }
 
 /****************************************************************************/
-function UpdateTiming(): { UpdateScreen: boolean; sleepTime?: number } {
+function UpdateTiming(): { UpdateScreen: boolean; sleepTime: number } {
   let UpdateScreen = false;
-  let sleepTime: number | undefined;
+  let sleepTime = 0;
 
   const TotalCycles = getTotalCycles();
   const TickCount = performance.now(); //GetTickCount();
@@ -268,7 +268,7 @@ function UpdateTiming(): { UpdateScreen: boolean; sleepTime?: number } {
     TotalCycles < m_LastTotalCycles
   ) {
     ResetTiming();
-    return { UpdateScreen: true, sleepTime: undefined };
+    return { UpdateScreen: true, sleepTime: 0 };
   }
 
   /* Update stats every second */
@@ -299,6 +299,7 @@ function UpdateTiming(): { UpdateScreen: boolean; sleepTime?: number } {
 
     const SpareTicks = nCycles / 2000 - Ticks;
     sleepTime = SpareTicks;
+
     m_MinFrameCount = 0;
   } else {
     // Need to speed up, skip a frame

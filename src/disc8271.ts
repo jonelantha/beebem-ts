@@ -24,7 +24,7 @@ Boston, MA  02110-1301, USA.
 /* 27/12/2011 J.G.Harston: Double-sided SSD supported */
 
 // #define DISC_ENABLED true
-// #define DISC_SOUND_ENABLED true
+const DISC_SOUND_ENABLED = true;
 
 import {
   ClearNMIStatus,
@@ -35,6 +35,12 @@ import {
   SetTrigger,
 } from "./6502core";
 import { get_m_ShiftBooted, set_m_ShiftBooted } from "./beebwin";
+import { CycleCountTMax } from "./port";
+import {
+  SAMPLE_HEAD_LOAD_CYCLES,
+  SAMPLE_HEAD_SEEK_CYCLES_PER_TRACK,
+  SAMPLE_HEAD_STEP_CYCLES,
+} from "./sound";
 import { BeebKeyUp } from "./sysvia";
 
 // header
@@ -109,9 +115,9 @@ let HeadSettlingTime = 0; // int In 2ms steps
 let IndexCountBeforeHeadUnload = 0; // int Number of revolutions (0 to 14), or 15 to keep loaded
 let HeadLoadTime = 0; // int In 8ms steps
 
-// static int DriveHeadPosition[2]={0};
-// static bool DriveHeadLoaded=false;
-// static bool DriveHeadUnloadPending=false;
+const DriveHeadPosition = [0, 0];
+let DriveHeadLoaded = false;
+let DriveHeadUnloadPending = false;
 
 let ThisCommand: number; // int
 let NParamsInThisCommand: number; // int
@@ -1304,11 +1310,11 @@ export function Disc8271Write(Address: number, Value: number) {
   // if (!DISC_ENABLED)
   //   return;
 
-  // // Clear a pending head unload
-  // if (DriveHeadUnloadPending) {
-  //   DriveHeadUnloadPending = false;
-  //   ClearTrigger(Disc8271Trigger);
-  // }
+  // Clear a pending head unload
+  if (DriveHeadUnloadPending) {
+    DriveHeadUnloadPending = false;
+    Disc8271Trigger = ClearTrigger();
+  }
 
   switch (Address) {
     case 0:
@@ -1343,92 +1349,89 @@ export function Disc8271Write(Address: number, Value: number) {
       break;
   }
 
-  //DriveHeadScheduleUnload();
+  DriveHeadScheduleUnload();
 }
 
 /*--------------------------------------------------------------------------*/
-// static void DriveHeadScheduleUnload(void) {
-// 	// Schedule head unload when nothing else is pending.
-// 	// This is mainly for the sound effects, but it also marks the drives as
-// 	// not ready when the motor stops.
-// 	if (DriveHeadLoaded && Disc8271Trigger==CycleCountTMax) {
-// 		SetTrigger(4000000,Disc8271Trigger); // 2s delay to unload
-// 		DriveHeadUnloadPending = true;
-// 	}
-// }
+function DriveHeadScheduleUnload() {
+  // Schedule head unload when nothing else is pending.
+  // This is mainly for the sound effects, but it also marks the drives as
+  // not ready when the motor stops.
+  if (DriveHeadLoaded && Disc8271Trigger == CycleCountTMax) {
+    Disc8271Trigger = SetTrigger(4000000); // 2s delay to unload
+    DriveHeadUnloadPending = true;
+  }
+}
 
 /*--------------------------------------------------------------------------*/
-// static bool DriveHeadMotorUpdate(void) {
-// 	// This is mainly for the sound effects, but it also marks the drives as
-// 	// not ready when the motor stops.
-// 	int Drive=0;
-// 	int Tracks=0;
+function DriveHeadMotorUpdate() {
+  // This is mainly for the sound effects, but it also marks the drives as
+  // not ready when the motor stops.
+  let Drive = 0;
+  let Tracks = 0;
 
-// 	if (DriveHeadUnloadPending) {
-// 		// Mark drives as not ready
-// 		Selects[0] = false;
-// 		Selects[1] = false;
-// 		DriveHeadUnloadPending = false;
-// 		if (DriveHeadLoaded && DISC_SOUND_ENABLED)
-// 			PlaySoundSample(SAMPLE_HEAD_UNLOAD, false);
-// 		DriveHeadLoaded = false;
-// 		StopSoundSample(SAMPLE_DRIVE_MOTOR);
-// 		StopSoundSample(SAMPLE_HEAD_SEEK);
+  if (DriveHeadUnloadPending) {
+    // Mark drives as not ready
+    Selects[0] = false;
+    Selects[1] = false;
+    DriveHeadUnloadPending = false;
+    if (DriveHeadLoaded && DISC_SOUND_ENABLED) {
+      // 	PlaySoundSample(SAMPLE_HEAD_UNLOAD, false);
+    }
+    DriveHeadLoaded = false;
+    // StopSoundSample(SAMPLE_DRIVE_MOTOR);
+    // StopSoundSample(SAMPLE_HEAD_SEEK);
 
-// 		LEDs.Disc0 = false;
-// 		LEDs.Disc1 = false;
-// 		return true;
-// 	}
+    // LEDs.Disc0 = false;
+    // LEDs.Disc1 = false;
+    return true;
+  }
 
-// 	if (!DISC_SOUND_ENABLED)
-// 	{
-// 		DriveHeadLoaded = true;
-// 		return false;
-// 	}
+  if (!DISC_SOUND_ENABLED) {
+    DriveHeadLoaded = true;
+    return false;
+  }
 
-// 	if (!DriveHeadLoaded) {
-// 		if (Selects[0]) LEDs.Disc0 = true;
-// 		if (Selects[1]) LEDs.Disc1 = true;
+  if (!DriveHeadLoaded) {
+    // if (Selects[0]) LEDs.Disc0 = true;
+    // if (Selects[1]) LEDs.Disc1 = true;
 
-// 		PlaySoundSample(SAMPLE_DRIVE_MOTOR, true);
-// 		DriveHeadLoaded = true;
-// 		PlaySoundSample(SAMPLE_HEAD_LOAD, false);
-// 		SetTrigger(SAMPLE_HEAD_LOAD_CYCLES, Disc8271Trigger);
-// 		return true;
-// 	}
+    //PlaySoundSample(SAMPLE_DRIVE_MOTOR, true);
+    DriveHeadLoaded = true;
+    //PlaySoundSample(SAMPLE_HEAD_LOAD, false);
+    Disc8271Trigger = SetTrigger(SAMPLE_HEAD_LOAD_CYCLES);
+    return true;
+  }
 
-// 	if (Selects[0]) Drive = 0;
-// 	if (Selects[1]) Drive = 1;
+  if (Selects[0]) Drive = 0;
+  if (Selects[1]) Drive = 1;
 
-// 	StopSoundSample(SAMPLE_HEAD_SEEK);
+  // StopSoundSample(SAMPLE_HEAD_SEEK);
 
-// 	if (DriveHeadPosition[Drive] != Internal_CurrentTrack[Drive]) {
-// 		Tracks = abs(DriveHeadPosition[Drive] - Internal_CurrentTrack[Drive]);
-// 		if (Tracks > 1) {
-// 			PlaySoundSample(SAMPLE_HEAD_SEEK, true);
-// 			SetTrigger(Tracks * SAMPLE_HEAD_SEEK_CYCLES_PER_TRACK, Disc8271Trigger);
-// 		}
-// 		else {
-// 			PlaySoundSample(SAMPLE_HEAD_STEP, false);
-// 			SetTrigger(SAMPLE_HEAD_STEP_CYCLES, Disc8271Trigger);
-// 		}
-// 		if (DriveHeadPosition[Drive] < Internal_CurrentTrack[Drive])
-// 			DriveHeadPosition[Drive] += Tracks;
-// 		else
-// 			DriveHeadPosition[Drive] -= Tracks;
+  if (DriveHeadPosition[Drive] != Internal_CurrentTrack[Drive]) {
+    Tracks = Math.abs(DriveHeadPosition[Drive] - Internal_CurrentTrack[Drive]);
+    if (Tracks > 1) {
+      //PlaySoundSample(SAMPLE_HEAD_SEEK, true);
+      Disc8271Trigger = SetTrigger(Tracks * SAMPLE_HEAD_SEEK_CYCLES_PER_TRACK);
+    } else {
+      //PlaySoundSample(SAMPLE_HEAD_STEP, false);
+      Disc8271Trigger = SetTrigger(SAMPLE_HEAD_STEP_CYCLES);
+    }
+    if (DriveHeadPosition[Drive] < Internal_CurrentTrack[Drive])
+      DriveHeadPosition[Drive] += Tracks;
+    else DriveHeadPosition[Drive] -= Tracks;
 
-// 		return true;
-// 	}
-// 	return false;
-// }
+    return true;
+  }
+  return false;
+}
 
 /*--------------------------------------------------------------------------*/
 
 function Disc8271_poll_real() {
   Disc8271Trigger = ClearTrigger();
 
-  //   if (DriveHeadMotorUpdate())
-  //     return;
+  if (DriveHeadMotorUpdate()) return;
 
   // Set the interrupt flag in the status register
   StatusReg |= STATUS_REG_INTERRUPT_REQUEST;
@@ -1445,7 +1448,7 @@ function Disc8271_poll_real() {
     if (comptr.IntHandler) comptr.IntHandler();
   }
 
-  //   DriveHeadScheduleUnload();
+  DriveHeadScheduleUnload();
 }
 
 /*--------------------------------------------------------------------------*/
@@ -1651,10 +1654,10 @@ export function Disc8271Reset() {
   IndexCountBeforeHeadUnload = 12;
   HeadLoadTime = 8;
 
-  //   if (DriveHeadLoaded) {
-  //     DriveHeadUnloadPending = true;
-  //     DriveHeadMotorUpdate();
-  //   }
+  if (DriveHeadLoaded) {
+    DriveHeadUnloadPending = true;
+    DriveHeadMotorUpdate();
+  }
 
   Disc8271Trigger = ClearTrigger(); /* No Disc8271Triggered events yet */
 

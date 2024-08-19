@@ -1264,7 +1264,9 @@ function AdjustVideo() {
   }
 
   let InitialOffset =
-    0 - ((CRTC_HorizontalTotal + 1) / 2 - (HSyncModifier == 8 ? 40 : 20));
+    0 -
+    (Math.floor((CRTC_HorizontalTotal + 1) / 2) -
+      (HSyncModifier == 8 ? 40 : 20));
   let HStart =
     InitialOffset +
     (CRTC_HorizontalTotal +

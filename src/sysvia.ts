@@ -125,7 +125,7 @@ function UpdateIFRTopBit() {
   if (SysVIAState.ifr & (SysVIAState.ier & 0x7f)) SysVIAState.ifr |= 0x80;
   else SysVIAState.ifr &= 0x7f;
   setIntStatus(getIntStatus() & ~(1 << IRQ_sysVia));
-  setIntStatus(getIntStatus() | (SysVIAState.ifr & 128) ? 1 << IRQ_sysVia : 0);
+  setIntStatus(getIntStatus() | (SysVIAState.ifr & 128 ? 1 << IRQ_sysVia : 0));
 }
 
 export function PulseSysViaCB1() {
@@ -501,9 +501,9 @@ export function SysVIARead(Address: number) {
     //     case 10:
     //       tmp = SRData;
     //       break;
-    //     case 11:
-    //       tmp = SysVIAState.acr;
-    //       break;
+    case 11:
+      tmp = SysVIAState.acr;
+      break;
     //     case 12:
     //       tmp = SysVIAState.pcr;
     //       break;

@@ -141,7 +141,6 @@ export function UserVIAWrite(Address: number, Value: number) {
       break;
 
     case 7:
-      throw "not impl";
       // DebugTrace("UserVia Reg7 Timer1 hi latch Write val=0x%02x at %d\n", Value, TotalCycles);
       UserVIAState.timer1l &= 0xff;
       UserVIAState.timer1l |= Value << 8;
