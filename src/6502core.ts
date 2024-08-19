@@ -1710,10 +1710,10 @@ export function Exec6502Instruction() {
         // ADC zp,X
         ADCInstrHandler(ZeroPgXAddrModeHandler_Data());
         break;
-      // 		case 0x76:
-      // 			// ROR zp,X
-      // 			RORInstrHandler(ZeroPgXAddrModeHandler_Address());
-      // 			break;
+      case 0x76:
+        // ROR zp,X
+        RORInstrHandler(ZeroPgXAddrModeHandler_Address());
+        break;
       // 		case 0x77: {
       // 				// Undocumented instruction: RRA zp,X
       // 				int ZeroPageAddress = ZeroPgXAddrModeHandler_Address();

@@ -103,14 +103,12 @@ export function UserVIAWrite(Address: number, Value: number) {
       break;
 
     case 1:
-      throw "not impl";
       UserVIAState.ora = Value;
       UserVIAState.ifr &= 0xfc;
       UpdateIFRTopBit();
       break;
 
     case 2:
-      throw "not impl";
       UserVIAState.ddrb = Value;
       break;
 
@@ -213,7 +211,6 @@ export function UserVIARead(Address: number) {
 
   switch (Address) {
     case 0 /* IRB read */:
-      throw "not impl";
       tmp =
         (UserVIAState.orb & UserVIAState.ddrb) |
         (UserVIAState.irb & ~UserVIAState.ddrb);

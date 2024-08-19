@@ -466,9 +466,9 @@ export function SysVIARead(Address: number) {
       tmp |= 192; /* Speech system non existant */
       UpdateIFRTopBit();
       break;
-    //     case 2:
-    //       tmp = SysVIAState.ddrb;
-    //       break;
+    case 2:
+      tmp = SysVIAState.ddrb;
+      break;
     //     case 3:
     //       tmp = SysVIAState.ddra;
     //       break;
