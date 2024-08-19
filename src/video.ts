@@ -733,6 +733,8 @@ function LowLevelDoScanLineNarrow() {
      except every 4 entries */
   BytesToGo /= 4;
   for (; BytesToGo; CurrentPtr += 32, BytesToGo--) {
+    // possible error if dataBuf was not allocated enough
+    // (reproducable in Ravenskull by pushing space a lot)
     vidPtr = write8UChars(vidPtr, FastTable[dataBuf[CurrentPtr]]);
     vidPtr = write8UChars(vidPtr, FastTable[dataBuf[CurrentPtr + 8]]);
     vidPtr = write8UChars(vidPtr, FastTable[dataBuf[CurrentPtr + 16]]);
