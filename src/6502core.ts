@@ -1175,10 +1175,10 @@ export function Exec6502Instruction() {
       // 				ORAInstrHandler(ReadPaged(Address));
       // 			}
       // 			break;
-      // 		case 0x04:
-      // 			// Undocumented instruction: NOP zp
-      // 			ZeroPgAddrModeHandler_Address();
-      // 			break;
+      case 0x04:
+        // Undocumented instruction: NOP zp
+        ZeroPgAddrModeHandler_Address();
+        break;
       case 0x05:
         // ORA zp
         ORAInstrHandler(BEEBREADMEM_DIRECT(ZeroPgAddrModeHandler_Address()));
@@ -1256,10 +1256,10 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: NOP zp,X
       // 			ZeroPgXAddrModeHandler_Address();
       // 			break;
-      // 		case 0x15:
-      // 			// ORA zp,X
-      // 			ORAInstrHandler(ZeroPgXAddrModeHandler_Data());
-      // 			break;
+      case 0x15:
+        // ORA zp,X
+        ORAInstrHandler(ZeroPgXAddrModeHandler_Data());
+        break;
       case 0x16:
         // ASL zp,X
         ASLInstrHandler(ZeroPgXAddrModeHandler_Address());
@@ -1902,12 +1902,13 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: TAS abs,Y
       // 			WritePaged(AbsYAddrModeHandler_Address(), Accumulator & XReg);
       // 			break;
-      // 		case 0x9c: {
-      // 				// Undocumented instruction: SHY abs,X
-      // 				int Address = AbsXAddrModeHandler_Address();
-      // 				WritePaged(Address, YReg & (unsigned char)((Address >> 8) + 1));
-      // 			}
-      // 			break;
+      case 0x9c:
+        {
+          // Undocumented instruction: SHY abs,X
+          const Address = AbsXAddrModeHandler_Address();
+          WritePaged(Address, YReg & /*(unsigned char)*/ ((Address >> 8) + 1));
+        }
+        break;
       case 0x9d:
         // STA abs,X
         AdvanceCyclesForMemWrite();
