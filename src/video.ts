@@ -595,11 +595,10 @@ function DoFastTable() {
         ? LowLevelDoScanLineNarrow
         : LowLevelDoScanLineWide;
   } else {
-    throw "not impl";
-    // LineRoutine =
-    //   VideoULA_ControlReg & 0x10
-    //     ? LowLevelDoScanLineNarrowNot4Bytes
-    //     : LowLevelDoScanLineWideNot4Bytes;
+    LineRoutine =
+      VideoULA_ControlReg & 0x10
+        ? LowLevelDoScanLineNarrowNot4Bytes
+        : LowLevelDoScanLineWideNot4Bytes;
   }
 
   //What happens next depends on the number of colours
@@ -741,6 +740,23 @@ function LowLevelDoScanLineNarrow() {
   }
 }
 
+/*--------------------------------------------------------------------------*/
+/* Scanline processing for modes with fast 6845 clock - i.e. narrow pixels  */
+/* This version handles screen modes where there is not a multiple of 4     */
+/* bytes per scanline.                                                      */
+function LowLevelDoScanLineNarrowNot4Bytes() {
+  throw "not impl";
+  // int BytesToGo=CRTC_HorizontalDisplayed;
+  // EightUChars *vidPtr=mainWin->GetLinePtr(VideoState.PixmapLine);
+
+  // /* If the step is 4 then each byte corresponds to one entry in the fasttable
+  //    and thus we can copy it really easily (and fast!) */
+  // const unsigned char *CurrentPtr = VideoState.DataPtr + VideoState.InCharLineUp;
+
+  // for(;BytesToGo;CurrentPtr+=8,BytesToGo--)
+  //   (vidPtr++)->eightbyte=FastTable[*CurrentPtr].eightbyte;
+}
+
 /*-----------------------------------------------------------------------------*/
 /* Scanline processing for the low clock rate modes                            */
 function LowLevelDoScanLineWide() {
@@ -763,6 +779,21 @@ function LowLevelDoScanLineWide() {
     vidPtr = write16UChars(vidPtr, FastTableDWidth[dataBuf[CurrentPtr + 16]]);
     vidPtr = write16UChars(vidPtr, FastTableDWidth[dataBuf[CurrentPtr + 24]]);
   }
+}
+
+/*-----------------------------------------------------------------------------*/
+/* Scanline processing for the low clock rate modes                            */
+/* This version handles cases where the screen width is not divisible by 4     */
+function LowLevelDoScanLineWideNot4Bytes() {
+  const dataBuf = VideoState.DataBuf!;
+
+  let BytesToGo = CRTC_HorizontalDisplayed;
+  let vidPtr = GetLinePtr(VideoState.PixmapLine);
+
+  let CurrentPtr = VideoState.InCharLineUp;
+
+  for (; BytesToGo; CurrentPtr += 8, BytesToGo--)
+    vidPtr = write16UChars(vidPtr, FastTableDWidth[dataBuf[CurrentPtr]]);
 }
 
 /*-------------------------------------------------------------------------------------------------------------*/
