@@ -36,6 +36,7 @@ import { bufferHeight, bufferWidth, InitSurfaces } from "./beebwindx";
 import { KeyMap, KeyMapping, REAL_TIME_TARGET } from "./beebwinh";
 import { Disc8271Reset, FreeDiscImage, LoadSimpleDiscImage } from "./disc8271";
 import { defaultKeymapData, logicalKeymapData } from "./keymap";
+import { SoundInit, SoundReset, SwitchOnSound } from "./sound";
 import { BeebKeyDown, BeebKeyUp, SysVIAReset } from "./sysvia";
 import { UserVIAReset } from "./uservia";
 import { BuildMode7Font, VideoInit } from "./video";
@@ -105,9 +106,9 @@ async function ResetBeebSystem(
   LoadRoms: boolean,
   discImage: string | undefined,
 ) {
-  // SoundReset();
-  // SoundInit();
-  // SwitchOnSound();
+  SoundReset();
+  SoundInit();
+  SwitchOnSound();
   await BeebMemInit(LoadRoms);
   Init6502core();
 

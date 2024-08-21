@@ -30,6 +30,7 @@ import {
 import { AdjustTriggerDisc8271, Disc8271Poll } from "./disc8271";
 import { CycleCountTMax, CycleCountWrap } from "./port";
 import { AdjustTriggerTape, SerialPoll } from "./serial";
+import { AdjustTriggerSound, SoundPoll } from "./sound";
 import { SysVIA_poll } from "./sysvia";
 import { UserVIA_poll } from "./uservia";
 import { AdjustTriggerVideo, VideoPoll } from "./video";
@@ -2422,7 +2423,7 @@ function PollHardware(nCycles: number) {
   if (TotalCycles > CycleCountWrap) {
     TotalCycles -= CycleCountWrap;
     AdjustTriggerAtoD(CycleCountTMax, CycleCountWrap);
-    //AdjustTrigger(SoundTrigger);
+    AdjustTriggerSound(CycleCountTMax, CycleCountWrap);
     AdjustTriggerDisc8271(CycleCountTMax, CycleCountWrap);
     AdjustTriggerVideo(CycleCountTMax, CycleCountWrap);
     AdjustTriggerTape(CycleCountTMax, CycleCountWrap);
@@ -2435,9 +2436,9 @@ function PollHardware(nCycles: number) {
   //if (!BasicHardwareOnly) {
   AtoD_poll(nCycles);
   SerialPoll();
-  //   //}
+  //   }
   Disc8271Poll();
-  //   SoundPoll();
+  SoundPoll(); // could be time critical
 
   //   if (DisplayCycles > 0) DisplayCycles -= nCycles; // Countdown time till end of display of info.
   return sleepTime;

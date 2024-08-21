@@ -33,6 +33,7 @@ import {
   setCyclesToInt,
   setIntStatus,
 } from "./6502core";
+import { Sound_RegWrite, SOUNDSUPPORT } from "./sound";
 import {
   PCR_CA2_CONTROL,
   PCR_CA2_OUTPUT_HIGH,
@@ -243,9 +244,12 @@ function IC32Write(Value: number) {
   OldCMOSState = tmpCMOSState;
 
   /* Must do sound reg access when write line changes */
-  // #ifdef SOUNDSUPPORT
-  //   if (((oldval & 1)) && (!(IC32State & 1))) { Sound_RegWrite(SlowDataBusWriteValue); }
-  //   // now, this was a change from 0 to 1, but my docs say its a change from 1 to 0. might work better this way.
+  if (SOUNDSUPPORT) {
+    if (oldval & 1 && !(IC32State & 1)) {
+      Sound_RegWrite(SlowDataBusWriteValue);
+    }
+  }
+  // now, this was a change from 0 to 1, but my docs say its a change from 1 to 0. might work better this way.
   // #endif
   // DebugTrace("IC32State now=%x\n", IC32State);
 
@@ -276,10 +280,12 @@ function SlowDataBusWrite(Value: number) {
     DoKbdIntCheck(); /* Should really only if write enable on KBD changes */
   } /* kbd write */
 
-  // #ifdef SOUNDSUPPORT
-  //   if (!(IC32State & 1)) {
-  // 		Sound_RegWrite(SlowDataBusWriteValue);
-  //   }
+  if (SOUNDSUPPORT) {
+    if (!(IC32State & 1)) {
+      Sound_RegWrite(SlowDataBusWriteValue);
+    }
+  }
+
   // #endif
 }
 
