@@ -119,6 +119,7 @@ export function write8UChars(vidPtr: number, eightUChars: EightUChars) {
     for (let i = 0; i < 8; i++) {
       screen[vidPtr++] = 0;
     }
+    return vidPtr;
   }
   for (let i = 0; i < 8; i++) {
     screen[vidPtr++] = eightUChars[i];
