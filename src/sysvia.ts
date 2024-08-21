@@ -487,12 +487,12 @@ export function SysVIARead(Address: number) {
     case 5 /* Timer 1 hi counter */:
       tmp = (SysVIAState.timer1c >> 9) & 0xff; //K.Lowe
       break;
-    //     case 6: /* Timer 1 lo latch */
-    //       tmp = SysVIAState.timer1l & 0xff;
-    //       break;
-    //     case 7: /* Timer 1 hi latch */
-    //       tmp = (SysVIAState.timer1l>>8) & 0xff; //K.Lowe
-    //       break;
+    case 6 /* Timer 1 lo latch */:
+      tmp = SysVIAState.timer1l & 0xff;
+      break;
+    case 7 /* Timer 1 hi latch */:
+      tmp = (SysVIAState.timer1l >> 8) & 0xff; //K.Lowe
+      break;
     //     case 8: /* Timer 2 lo counter */
     //       if (SysVIAState.timer2c < 0) /* Adjust for dividing -ve count by 2 */
     //         tmp=((SysVIAState.timer2c - 1) / 2) & 0xff;

@@ -1223,9 +1223,10 @@ export function Disc8271Read(Address: number) {
       break;
 
     default:
-      throw "not impl";
       //   #if ENABLE_LOG
-      //   WriteLog("8271: Read to unknown register address=%04X\n", Address);
+      console.log(
+        `8271: Read to unknown register address=${Address.toString(16)}`,
+      );
       //   #endif
       break;
   }
