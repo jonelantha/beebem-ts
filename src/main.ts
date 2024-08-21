@@ -31,9 +31,9 @@ import { BeebReleaseAllKeys } from "./sysvia";
 
 import "./style.css";
 
-await new Promise<void>(res => {
-  document.addEventListener("click", () => res(), { once: true });
-});
+// await new Promise<void>(res => {
+//   document.addEventListener("click", () => res(), { once: true });
+// });
 
 (async function run() {
   document.addEventListener("keydown", evt => {

@@ -90,8 +90,16 @@ let SoundTuning = 0.0; // double Tuning offset
 
 /****************************************************************************/
 /* Writes sound data to a sound buffer */
-let bufferPlayTime = 0.01;
+let bufferPlayTime = -1;
+
+const audioCtx = new AudioContext({ sampleRate: SOUND_SAMPLE_RATE });
+
 function WriteToSoundBuffer(buf: Uint8Array) {
+  if (audioCtx.state !== "running") {
+    audioCtx.resume();
+    return;
+  }
+
   const myArrayBuffer = audioCtx.createBuffer(
     2,
     SoundBufferSize,
@@ -111,13 +119,19 @@ function WriteToSoundBuffer(buf: Uint8Array) {
 
   source.connect(audioCtx.destination);
 
-  source.start(bufferPlayTime);
+  if (bufferPlayTime === -1 || bufferPlayTime < audioCtx.currentTime) {
+    bufferPlayTime = audioCtx.currentTime;
+  }
+
+  source.start(bufferPlayTime ?? audioCtx.currentTime);
 
   bufferPlayTime += 1 / 50;
 }
 
 /****************************************************************************/
 /* DestTime is in samples */
+
+let per = 0;
 
 /**
  * @param DestTime double
@@ -157,39 +171,34 @@ function PlayUpTil(DestTime: number) {
         /* Now put in noise generator stuff */
         if (ActiveChannel[0]) {
           if (BeebState76489.Noise.FB) {
-            throw "not impl";
             /* White noise */
             if (GenState[0]) tmptotal += BeebState76489.ToneVolume[0];
             else tmptotal -= BeebState76489.ToneVolume[0];
             GenIndex[0]++;
             switch (BeebState76489.Noise.Freq) {
               case 0 /* Low */:
-                throw "not impl";
-                // if (GenIndex[0] >= SOUND_SAMPLE_RATE / 10000) {
-                //   GenIndex[0] = 0;
-                //   GenState[0] = rand() & 1;
-                // }
+                if (GenIndex[0] >= SOUND_SAMPLE_RATE / 10000) {
+                  GenIndex[0] = 0;
+                  GenState[0] = Math.random() > 0.5 ? 1 : 0;
+                }
                 break;
               case 1 /* Med */:
-                throw "not impl";
-                // if (GenIndex[0] >= SOUND_SAMPLE_RATE / 5000) {
-                //   GenIndex[0] = 0;
-                //   GenState[0] = rand() & 1;
-                // }
+                if (GenIndex[0] >= SOUND_SAMPLE_RATE / 5000) {
+                  GenIndex[0] = 0;
+                  GenState[0] = Math.random() > 0.5 ? 1 : 0;
+                }
                 break;
               case 2 /* High */:
-                throw "not impl";
-                // if (GenIndex[0] >= SOUND_SAMPLE_RATE / 2500) {
-                //   GenIndex[0] = 0;
-                //   GenState[0] = rand() & 1;
-                // }
+                if (GenIndex[0] >= SOUND_SAMPLE_RATE / 2500) {
+                  GenIndex[0] = 0;
+                  GenState[0] = Math.random() > 0.5 ? 1 : 0;
+                }
                 break;
               case 3 /* as channel 1 */:
-                throw "not impl";
-                // if (GenIndex[0] >= BeebState76489.ChangeSamps[1]) {
-                //   GenIndex[0] = 0;
-                //   GenState[0] = rand() & 1;
-                // }
+                if (GenIndex[0] >= BeebState76489.ChangeSamps[1]) {
+                  GenIndex[0] = 0;
+                  GenState[0] = Math.random() > 0.5 ? 1 : 0;
+                }
                 break;
             } /* Freq type switch */
           } else {
@@ -199,32 +208,30 @@ function PlayUpTil(DestTime: number) {
             GenIndex[0]++;
             switch (BeebState76489.Noise.Freq) {
               case 2 /* Low */:
-                throw "not impl";
-                // if (GenState[0]) {
-                //   if (GenIndex[0] >= SOUND_SAMPLE_RATE / 125) {
-                //     GenIndex[0] = 0;
-                //     GenState[0] = 0;
-                //   }
-                // } else {
-                //   if (GenIndex[0] >= SOUND_SAMPLE_RATE / 1250) {
-                //     GenIndex[0] = 0;
-                //     GenState[0] = 1;
-                //   }
-                // }
+                if (GenState[0]) {
+                  if (GenIndex[0] >= SOUND_SAMPLE_RATE / 125) {
+                    GenIndex[0] = 0;
+                    GenState[0] = 0;
+                  }
+                } else {
+                  if (GenIndex[0] >= SOUND_SAMPLE_RATE / 1250) {
+                    GenIndex[0] = 0;
+                    GenState[0] = 1;
+                  }
+                }
                 break;
               case 1 /* Med */:
-                throw "not impl";
-                // if (GenState[0]) {
-                //   if (GenIndex[0] >= SOUND_SAMPLE_RATE / 250) {
-                //     GenIndex[0] = 0;
-                //     GenState[0] = 0;
-                //   }
-                // } else {
-                //   if (GenIndex[0] >= SOUND_SAMPLE_RATE / 2500) {
-                //     GenIndex[0] = 0;
-                //     GenState[0] = 1;
-                //   }
-                // }
+                if (GenState[0]) {
+                  if (GenIndex[0] >= SOUND_SAMPLE_RATE / 250) {
+                    GenIndex[0] = 0;
+                    GenState[0] = 0;
+                  }
+                } else {
+                  if (GenIndex[0] >= SOUND_SAMPLE_RATE / 2500) {
+                    GenIndex[0] = 0;
+                    GenState[0] = 1;
+                  }
+                }
                 break;
               case 0 /* High */:
                 if (GenState[0]) {
@@ -240,17 +247,15 @@ function PlayUpTil(DestTime: number) {
                 }
                 break;
               case 3 /* Tone gen 1 */:
-                throw "not impl";
-                // tt = /*(int)*/ CSC[0];
-                // if (GenIndex[0] >= BeebState76489.ChangeSamps[1] + tt) {
-                //   let per = 0; // int
-                //   CSC[0] += CSA[1] - tt;
-                //   GenIndex[0] = 0;
-                //   GenState[0] = per == 0;
-                //   if (++per == 30) {
-                //     per = 0;
-                //   }
-                // }
+                tt = Math.trunc(CSC[0]);
+                if (GenIndex[0] >= BeebState76489.ChangeSamps[1] + tt) {
+                  CSC[0] += CSA[1] - tt;
+                  GenIndex[0] = 0;
+                  GenState[0] = per == 0 ? 1 : 0;
+                  if (++per == 30) {
+                    per = 0;
+                  }
+                }
                 break;
             } /* Freq type switch */
           }
@@ -502,8 +507,6 @@ export function SoundInit() {
   //LoadSoundSamples();
   SoundTrigger = getTotalCycles() + SoundAutoTriggerTime;
 }
-
-const audioCtx = new AudioContext({ sampleRate: SOUND_SAMPLE_RATE });
 
 export function SwitchOnSound() {
   SetFreq(3, 1000);
