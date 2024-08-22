@@ -5,10 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>beebem</title>
   </head>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
+      background-color: black;
+    }
+
+    #primaryCanvas {
+      object-fit: contain;
+      width: 100%;
+      height: 100%;
+    }
+
+    #bufferCanvas {
+      display: none;
+    }
+  </style>
   <body>
-    <script type="module" src="/src/main.ts"></script>
     <canvas id="primaryCanvas"></canvas>
-    <br />
-    <canvas id="bufferCanvas" style="display: none"></canvas>
+    <canvas id="bufferCanvas"></canvas>
   </body>
+  <script type="module" src="/src/main.ts"></script>
 </html>

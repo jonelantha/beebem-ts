@@ -29,8 +29,6 @@ import {
 import { Exec6502Instruction } from "./6502core";
 import { BeebReleaseAllKeys } from "./sysvia";
 
-import "./style.css";
-
 // await new Promise<void>(res => {
 //   document.addEventListener("click", () => res(), { once: true });
 // });
