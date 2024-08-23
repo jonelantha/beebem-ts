@@ -78,22 +78,22 @@ let logicalMapping: KeyMap;
 let transTable: KeyMap;
 
 /****************************************************************************/
-export async function Initialise() {
+export async function Initialise(keyMapping: "logical" | "default") {
   ResetTiming();
 
   CreateBeebWindow();
   CreateBitmap();
 
-  await ApplyPrefs();
+  await ApplyPrefs(keyMapping);
 
   await BuildMode7Font("/teletext.fnt");
 }
 
 /****************************************************************************/
-async function ApplyPrefs() {
+async function ApplyPrefs(keyMapping: "logical" | "default") {
   defaultMapping = ReadKeyMap(defaultKeymapData);
   logicalMapping = ReadKeyMap(logicalKeymapData);
-  transTable = defaultMapping;
+  transTable = keyMapping === "logical" ? logicalMapping : defaultMapping;
 
   InitSurfaces();
 

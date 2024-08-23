@@ -54,7 +54,10 @@ import { BeebReleaseAllKeys } from "./sysvia";
 
   set_m_KeyMapAS(Boolean(params.get("mapAS")));
 
-  await Initialise();
+  const keyMapping =
+    params.get("keyMapping") === "logical" ? "logical" : "default";
+
+  await Initialise(keyMapping);
 
   const discImage = params.get("disc") ?? "";
 
