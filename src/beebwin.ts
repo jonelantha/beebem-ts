@@ -86,7 +86,7 @@ export async function Initialise(keyMapping: "logical" | "default") {
 
   await ApplyPrefs(keyMapping);
 
-  await BuildMode7Font("/teletext.fnt");
+  await BuildMode7Font("teletext.fnt");
 }
 
 /****************************************************************************/

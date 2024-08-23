@@ -41,9 +41,9 @@ const MC6850_STATUS_RDRF = 0x01;
 const MC6850_STATUS_TDRE = 0x02;
 const MC6850_STATUS_DCD = 0x04;
 const MC6850_STATUS_CTS = 0x08;
-const MC6850_STATUS_FE = 0x10;
-const MC6850_STATUS_OVRN = 0x20;
-const MC6850_STATUS_PE = 0x40;
+// const MC6850_STATUS_FE = 0x10;
+// const MC6850_STATUS_OVRN = 0x20;
+// const MC6850_STATUS_PE = 0x40;
 const MC6850_STATUS_IRQ = 0x80;
 
 // main
@@ -51,9 +51,9 @@ const MC6850_STATUS_IRQ = 0x80;
 // MC6850 control register bits
 const MC6850_CONTROL_COUNTER_DIVIDE = 0x03;
 const MC6850_CONTROL_MASTER_RESET = 0x03;
-const MC6850_CONTROL_WORD_SELECT = 0x1c;
-const MC6850_CONTROL_TRANSMIT_CONTROL = 0x60;
-const MC6850_CONTROL_RIE = 0x80;
+// const MC6850_CONTROL_WORD_SELECT = 0x1c;
+// const MC6850_CONTROL_TRANSMIT_CONTROL = 0x60;
+// const MC6850_CONTROL_RIE = 0x80;
 
 // enum class SerialDevice : unsigned char {
 // 	Cassette,
@@ -63,10 +63,10 @@ const MC6850_CONTROL_RIE = 0x80;
 // static bool CassetteRelay = false; // Cassette Relay state
 // static SerialDevice SerialChannel = SerialDevice::Cassette; // Device in use
 
-let RDR = 0,
-  TDR = 0; // static unsigned char Receive and Transmit Data Registers
-let RDSR = 0,
-  TDSR = 0; // // static unsigned char Receive and Transmit Data Shift Registers (buffers)
+let RDR = 0; // static unsigned char Receive and Transmit Data Registers
+//let TDR = 0; // static unsigned char
+let RDSR = 0; // static unsigned char Receive and Transmit Data Shift Registers (buffers)
+//let TDSR = 0; // static unsigned char
 // unsigned int Tx_Rate = 1200; // Transmit baud rate
 // unsigned int Rx_Rate = 1200; // Recieve baud rate
 // unsigned char Clk_Divide = 1; // Clock divide rate
@@ -75,7 +75,7 @@ let ACIA_Status = 0; // unsigned char 6850 ACIA Status register
 // unsigned char ACIA_Control; // 6850 ACIA Control register
 let SerialULAControl = 0; // unsigned char  Serial ULA / SERPROC control register
 
-let RTS = false;
+//let RTS = false;
 let FirstReset = true;
 let DCD = false;
 let DCDI = true;
@@ -167,7 +167,7 @@ export function SerialACIAWriteControl(Value: number) {
       // RTS High on first Master reset.
       ACIA_Status |= MC6850_STATUS_CTS;
       FirstReset = false;
-      RTS = true;
+      //RTS = true;
     }
     ACIA_Status &= ~MC6850_STATUS_DCD;
     DCD = false;

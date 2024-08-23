@@ -50,7 +50,7 @@ import {
 // main
 
 // Shift register stuff
-let SRMode = 0; //unsigned char
+//let SRMode = 0; //unsigned char
 //let SRCount = 0; // unsigned char
 // unsigned char SRData;
 // unsigned char SREnabled;
@@ -404,7 +404,7 @@ export function SysVIAWrite(Address: number, Value: number) {
 
     case 11:
       SysVIAState.acr = Value;
-      SRMode = (Value >> 2) & 7;
+      //SRMode = (Value >> 2) & 7;
       break;
 
     case 12:
@@ -632,7 +632,7 @@ export function SysVIAReset() {
   BeebReleaseAllKeys();
 
   // SRData = 0;
-  SRMode = 0;
+  //SRMode = 0;
   //SRCount = 0;
   // SREnabled = 0; // Disable Shift register shifting shiftily. (I am nuts) - Richard Gellman
 }

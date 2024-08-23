@@ -448,9 +448,9 @@ async function BeebReadRoms() {
     Roms[bank].fill(0);
   }
 
-  await LoadOSRom("/roms/OS12.rom");
-  await LoadPagedRom(14, "/roms/DNFS.rom");
-  await LoadPagedRom(15, "/roms/BASIC2.rom");
+  await LoadOSRom("roms/OS12.rom");
+  await LoadPagedRom(14, "roms/DNFS.rom");
+  await LoadPagedRom(15, "roms/BASIC2.rom");
 }
 
 /*----------------------------------------------------------------------------*/

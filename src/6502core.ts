@@ -76,8 +76,8 @@ const charToUnsignedChar = (val: number) => {
 
 // main
 
-let tempInstCount = -1;
-export const getInstCount = () => tempInstCount;
+//let tempInstCount = 0;
+//export const getInstCount = () => tempInstCount;
 
 let CurrentInstruction = -1;
 
@@ -97,14 +97,14 @@ let NMIStatus = 0; /* bit set (nums in NMI_Nums) if NMI being caused */
 export const SetNMIStatus = (flag: number) => (NMIStatus |= flag);
 export const ClearNMIStatus = (flag: number) => (NMIStatus &= ~flag);
 
-let NMILock = false; // Well I think NMI's are maskable - to stop repeated NMI's - the lock is released when an RTI is done
+//let NMILock = false; // Well I think NMI's are maskable - to stop repeated NMI's - the lock is released when an RTI is done
 
 /* Note how GETCFLAG is special since being bit 0 we don't need to test it to get a clean 0/1 */
 const GETCFLAG = () => (PSR & FlagC) > 0;
 const GETZFLAG = () => (PSR & FlagZ) > 0;
 const GETIFLAG = () => (PSR & FlagI) > 0;
 const GETDFLAG = () => (PSR & FlagD) > 0;
-const GETBFLAG = () => (PSR & FlagB) > 0;
+//const GETBFLAG = () => (PSR & FlagB) > 0;
 const GETVFLAG = () => (PSR & FlagV) > 0;
 const GETNFLAG = () => (PSR & FlagN) > 0;
 
@@ -204,9 +204,14 @@ function GETTWOBYTEFROMPC() {
 const WritePaged = BeebWriteMem;
 const ReadPaged = BeebReadMem;
 
-function shouldTrace() {
-  return 370 <= tempInstCount && tempInstCount <= 400;
-}
+// const traceStart = 10700000;
+// const traceEnd = traceStart + 100; // 10550730
+// export function shouldTrace() {
+//   return false; //traceStart <= tempInstCount && tempInstCount <= traceEnd;
+// }
+// export function shouldTrace2() {
+//   return false; //10500000 <= tempInstCount && tempInstCount <= 10550000;
+// }
 
 /*----------------------------------------------------------------------------*/
 
@@ -1070,7 +1075,7 @@ export function Init6502core() {
 
   intStatus = 0;
   NMIStatus = 0;
-  NMILock = false;
+  //NMILock = false;
 }
 
 /*-------------------------------------------------------------------------*/
@@ -1084,7 +1089,7 @@ function DoInterrupt() {
 
 /*-------------------------------------------------------------------------*/
 function DoNMI() {
-  NMILock = true;
+  //NMILock = true;
   PushWord(ProgramCounter);
   Push(PSR);
   ProgramCounter = BeebReadMem(0xfffa) | (BeebReadMem(0xfffb) << 8);
@@ -1143,15 +1148,15 @@ export function Exec6502Instruction() {
     ViaCycles = 0;
     AdvanceCyclesForMemRead();
 
-    if (shouldTrace()) {
-      console.log(
-        tempInstCount,
-        ProgramCounter.toString(16),
-        CurrentInstruction.toString(16),
-      );
-    }
+    // if (shouldTrace()) {
+    //   console.log(
+    //     tempInstCount,
+    //     ProgramCounter.toString(16),
+    //     CurrentInstruction.toString(16),
+    //   );
+    // }
 
-    if (tempInstCount !== -1) tempInstCount++;
+    //if (tempInstCount !== -1) tempInstCount++;
 
     switch (CurrentInstruction) {
       case 0x00:
@@ -1464,7 +1469,7 @@ export function Exec6502Instruction() {
         // RTI
         PSR = Pop();
         ProgramCounter = PopWord();
-        NMILock = false;
+        //NMILock = false;
         break;
       // 		case 0x41:
       // 			// EOR (zp,X)

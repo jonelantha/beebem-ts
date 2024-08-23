@@ -110,10 +110,10 @@ const Internal_BadTracks = Array.from({ length: 2 }, () => [0, 0]);
 
 // State set by the Specify (initialisation) command
 // See Intel 8271 data sheet, page 15, ADUG page 39-40
-let StepRate = 0; // int In 2ms steps
-let HeadSettlingTime = 0; // int In 2ms steps
-let IndexCountBeforeHeadUnload = 0; // int Number of revolutions (0 to 14), or 15 to keep loaded
-let HeadLoadTime = 0; // int In 8ms steps
+// let StepRate = 0; // int In 2ms steps
+// let HeadSettlingTime = 0; // int In 2ms steps
+// let IndexCountBeforeHeadUnload = 0; // int Number of revolutions (0 to 14), or 15 to keep loaded
+// let HeadLoadTime = 0; // int In 8ms steps
 
 const DriveHeadPosition = [0, 0];
 let DriveHeadLoaded = false;
@@ -924,10 +924,10 @@ function DoReadDriveStatusCommand() {
 function DoSpecifyCommand() {
   switch (Params[0]) {
     case 0x0d: // Initialisation
-      StepRate = Params[1];
-      HeadSettlingTime = Params[2];
-      IndexCountBeforeHeadUnload = (Params[3] & 0xf0) >> 4;
-      HeadLoadTime = Params[3] & 0x0f;
+      // StepRate = Params[1];
+      // HeadSettlingTime = Params[2];
+      // IndexCountBeforeHeadUnload = (Params[3] & 0xf0) >> 4;
+      // HeadLoadTime = Params[3] & 0x0f;
       break;
     case 0x10: // Load bad tracks, surface 0
       Internal_BadTracks[0][0] = Params[1];
@@ -1650,10 +1650,10 @@ export function Disc8271Reset() {
   //   Internal_BadTracks[0][0]=Internal_BadTracks[0][1]=Internal_BadTracks[1][0]=Internal_BadTracks[1][1]=0xff; /* 1st subscript is surface 0/1 and second subscript is badtrack 0/1 */
 
   // Default values set by Acorn DFS:
-  StepRate = 12;
-  HeadSettlingTime = 10;
-  IndexCountBeforeHeadUnload = 12;
-  HeadLoadTime = 8;
+  // StepRate = 12;
+  // HeadSettlingTime = 10;
+  // IndexCountBeforeHeadUnload = 12;
+  // HeadLoadTime = 8;
 
   if (DriveHeadLoaded) {
     DriveHeadUnloadPending = true;
