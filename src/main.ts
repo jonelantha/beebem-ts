@@ -29,10 +29,6 @@ import {
 import { Exec6502Instruction } from "./6502core";
 import { BeebReleaseAllKeys } from "./sysvia";
 
-// await new Promise<void>(res => {
-//   document.addEventListener("click", () => res(), { once: true });
-// });
-
 (async function run() {
   document.addEventListener("keydown", evt => {
     if (evt.metaKey) return;

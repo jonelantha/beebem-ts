@@ -35,6 +35,7 @@ import {
   SetTrigger,
 } from "./6502core";
 import { get_m_ShiftBooted, set_m_ShiftBooted } from "./beebwin";
+import { fetchDiscImage } from "./fetcher";
 import { CycleCountTMax } from "./port";
 import {
   SAMPLE_HEAD_LOAD_CYCLES,
@@ -1469,8 +1470,7 @@ export async function LoadSimpleDiscImage(
   HeadNum: number,
   Tracks: number,
 ) {
-  const res = await fetch(FileName);
-  const buffer = await res.arrayBuffer();
+  const buffer = await fetchDiscImage(FileName);
 
   // mainWin->SetImageName(FileName, DriveNum, DiscType::SSD);
   // JGH, 26-Dec-2011
