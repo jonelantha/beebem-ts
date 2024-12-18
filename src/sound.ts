@@ -92,9 +92,22 @@ let SoundTuning = 0.0; // double Tuning offset
 /* Writes sound data to a sound buffer */
 let bufferPlayTime = -1;
 
-const audioCtx = new AudioContext({ sampleRate: SOUND_SAMPLE_RATE });
+let audioCtx: AudioContext | undefined;
+
+document.addEventListener("pointerdown", () => {
+  startAudio();
+});
+document.addEventListener("keydown", () => {
+  startAudio();
+});
+
+function startAudio() {
+  audioCtx ??= new AudioContext({ sampleRate: SOUND_SAMPLE_RATE });
+}
 
 function WriteToSoundBuffer(buf: Uint8Array) {
+  if (!audioCtx) return;
+
   if (audioCtx.state !== "running") {
     audioCtx.resume();
     return;
