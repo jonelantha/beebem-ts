@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build --base=/beebem/",
+    "build-gh-pages": "tsc && vite build --base=/beebem-ts/",
     "preview": "vite preview"
   },
   "devDependencies": {
