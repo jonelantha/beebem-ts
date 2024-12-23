@@ -25,7 +25,7 @@ Boston, MA  02110-1301, USA.
 import { getTotalCycles, IncTrigger, SetTrigger } from "./6502core";
 import { BeebMemPtrWithWrap, BeebMemPtrWithWrapMode7 } from "./beebmem";
 import { getScreen, StartOfFrame } from "./beebwin";
-import { bufferWidth, updateLines } from "./beebwindx";
+import { updateLines } from "./beebwindx";
 import {
   doHorizLine,
   doInvHorizLine,
@@ -188,34 +188,6 @@ let FrameNum = 0;
 
 // Build enhanced mode 7 font
 
-function tempDrawChar(fontType: number, char: number, x: number, y: number) {
-  const screen = getScreen();
-  for (let charY = 0; charY < 20; charY++) {
-    const scanline = Mode7Font[Mode7FontIndex(fontType, char, charY)];
-
-    for (let charX = 0; charX < 16; charX++) {
-      const bit = 1 << (16 - charX);
-      screen[charX + x * 16 + bufferWidth * (charY + y * 20)] =
-        scanline & bit ? 7 : 0;
-    }
-  }
-}
-
-function tempPlotCharset(fontType: number) {
-  let x = 0;
-  let y = 0;
-  for (let i = 0; i < 96; i++) {
-    tempDrawChar(fontType, i, x, y);
-
-    x++;
-    if (x === 20) {
-      x = 0;
-      y++;
-    }
-  }
-  updateLines(0, 500 / TeletextStyle);
-}
-
 export async function BuildMode7Font(filename: string) {
   const res = await fetch(filename);
   const buffer = await res.arrayBuffer();
@@ -313,8 +285,6 @@ export async function BuildMode7Font(filename: string) {
       Mode7Font[Mode7FontIndex(2, Character, 19)] = 0;
     }
   }
-
-  //tempPlotCharset(0);
 }
 
 /*-------------------------------------------------------------------------------------------------------------*/
