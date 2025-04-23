@@ -29,8 +29,24 @@ Boston, MA  02110-1301, USA.
 
 // header
 
-import { SetTrigger } from "./6502core";
+import {
+  getIntStatus,
+  getTotalCycles,
+  IRQ_serial,
+  setIntStatus,
+  SetTrigger,
+} from "./6502core";
+import {
+  CSWClose,
+  CSWCreateTapeMap,
+  CSWOpen,
+  CSWPoll,
+  getCSWPollCycles,
+  getCSWState,
+  setCSWptr,
+} from "./csw";
 import { CycleCountTMax } from "./port";
+import { getTapeAudio } from "./sound";
 
 export const AdjustTriggerTape = (max: number, wrap: number) => {
   if (TapeTrigger != max) TapeTrigger -= wrap;
@@ -42,7 +58,7 @@ const MC6850_STATUS_TDRE = 0x02;
 const MC6850_STATUS_DCD = 0x04;
 const MC6850_STATUS_CTS = 0x08;
 // const MC6850_STATUS_FE = 0x10;
-// const MC6850_STATUS_OVRN = 0x20;
+const MC6850_STATUS_OVRN = 0x20;
 // const MC6850_STATUS_PE = 0x40;
 const MC6850_STATUS_IRQ = 0x80;
 
@@ -53,15 +69,10 @@ const MC6850_CONTROL_COUNTER_DIVIDE = 0x03;
 const MC6850_CONTROL_MASTER_RESET = 0x03;
 // const MC6850_CONTROL_WORD_SELECT = 0x1c;
 // const MC6850_CONTROL_TRANSMIT_CONTROL = 0x60;
-// const MC6850_CONTROL_RIE = 0x80;
+const MC6850_CONTROL_RIE = 0x80;
 
-// enum class SerialDevice : unsigned char {
-// 	Cassette,
-// 	RS423
-// };
-
-// static bool CassetteRelay = false; // Cassette Relay state
-// static SerialDevice SerialChannel = SerialDevice::Cassette; // Device in use
+let CassetteRelay = false; // Cassette Relay state
+let SerialChannel: "cassette" | "rs423" = "cassette"; // Device in use
 
 let RDR = 0; // static unsigned char Receive and Transmit Data Registers
 //let TDR = 0; // static unsigned char
@@ -69,7 +80,9 @@ let RDSR = 0; // static unsigned char Receive and Transmit Data Shift Registers 
 //let TDSR = 0; // static unsigned char
 // unsigned int Tx_Rate = 1200; // Transmit baud rate
 // unsigned int Rx_Rate = 1200; // Recieve baud rate
-// unsigned char Clk_Divide = 1; // Clock divide rate
+let Clk_Divide = 1; // Clock divide rate
+export const setClk_Divide = (val: number) => (Clk_Divide = val);
+export const getClk_Divide = () => Clk_Divide;
 
 let ACIA_Status = 0; // unsigned char 6850 ACIA Status register
 // unsigned char ACIA_Control; // 6850 ACIA Control register
@@ -79,7 +92,7 @@ let SerialULAControl = 0; // unsigned char  Serial ULA / SERPROC control registe
 let FirstReset = true;
 let DCD = false;
 let DCDI = true;
-// static bool ODCDI = true;
+let ODCDI = true;
 // static unsigned char DCDClear = 0; // count to clear DCD bit
 
 // static unsigned char Parity, StopBits, DataBits;
@@ -95,6 +108,9 @@ let RxD = 0; // unsigned char Receive destination (data or shift register)
 
 // static UEFFileReader UEFReader;
 // static bool UEFFileOpen = false;
+let CSWFileOpen = false;
+
+let TapePlaying = true;
 
 // struct WordSelectBits
 // {
@@ -134,14 +150,14 @@ let RxD = 0; // unsigned char Receive destination (data or shift register)
 // 	19200, 1200, 4800, 150, 9600, 300, 2400, 75
 // };
 
-// bool OldRelayState = false;
+let OldRelayState = false;
 let TapeTrigger = CycleCountTMax;
 const TAPECYCLES = 2000000 / 5600; // 5600 is normal tape speed
 
 // static int UEFBuf = 0;
 // static int OldUEFBuf = 0;
-// static int TapeClock = 0;
-// static int OldClock = 0;
+let TapeClock = 0;
+let OldClock = 0;
 // int TapeClockSpeed = 5600;
 
 /**
@@ -178,9 +194,9 @@ export function SerialACIAWriteControl(Value: number) {
   }
 
   // Clock Divide
-  // if ((Value & MC6850_CONTROL_COUNTER_DIVIDE) == 0x00) Clk_Divide = 1;
-  // if ((Value & MC6850_CONTROL_COUNTER_DIVIDE) == 0x01) Clk_Divide = 16;
-  // if ((Value & MC6850_CONTROL_COUNTER_DIVIDE) == 0x02) Clk_Divide = 64;
+  if ((Value & MC6850_CONTROL_COUNTER_DIVIDE) == 0x00) Clk_Divide = 1;
+  if ((Value & MC6850_CONTROL_COUNTER_DIVIDE) == 0x01) Clk_Divide = 16;
+  if ((Value & MC6850_CONTROL_COUNTER_DIVIDE) == 0x02) Clk_Divide = 64;
 
   // Word select
   // Parity   = WordSelect[(Value & MC6850_CONTROL_WORD_SELECT) >> 2].Parity;
@@ -190,10 +206,10 @@ export function SerialACIAWriteControl(Value: number) {
   // Transmitter control
   // RTS = TransmitterControl[(Value & MC6850_CONTROL_TRANSMIT_CONTROL) >> 5].RTS;
   // TIE = TransmitterControl[(Value & MC6850_CONTROL_TRANSMIT_CONTROL) >> 5].TIE;
-  // RIE = (Value & MC6850_CONTROL_RIE) != 0;
+  RIE = (Value & MC6850_CONTROL_RIE) != 0;
 
   // Seem to need an interrupt immediately for tape writing when TIE set
-  // if (SerialChannel == SerialDevice::Cassette && TIE && CassetteRelay)
+  // if (SerialChannel == 'cassette' && TIE && CassetteRelay)
   // {
   // 	ACIA_Status |= MC6850_STATUS_IRQ;
   // 	intStatus |= 1 << serial;
@@ -242,22 +258,20 @@ export function SerialULAWrite(Value: number) {
 
   // Slightly easier this time.
   // just the Rx and Tx baud rates, and the selectors.
-  // CassetteRelay = (Value & 0x80) != 0;
-  // TapeAudio.Enabled = CassetteRelay;
+  CassetteRelay = (Value & 0x80) != 0;
+  getTapeAudio().Enabled = CassetteRelay;
   // LEDs.Motor = CassetteRelay;
 
-  // if (CassetteRelay)
-  // {
-  // 	SetTrigger(TAPECYCLES, TapeTrigger);
-  // }
+  if (CassetteRelay) {
+    TapeTrigger = SetTrigger(TAPECYCLES);
+  }
 
-  // if (CassetteRelay != OldRelayState)
-  // {
-  // 	OldRelayState = CassetteRelay;
-  // 	ClickRelay(CassetteRelay);
-  // }
+  if (CassetteRelay != OldRelayState) {
+    OldRelayState = CassetteRelay;
+    //ClickRelay(CassetteRelay);
+  }
 
-  // SerialChannel = (Value & 0x40) != 0 ? SerialDevice::RS423 : SerialDevice::Cassette;
+  SerialChannel = (Value & 0x40) != 0 ? "rs423" : "cassette";
   // Tx_Rate = Baud_Rates[(Value & 0x07)];
   // Rx_Rate = Baud_Rates[(Value & 0x38) >> 3];
 }
@@ -293,60 +307,52 @@ export function SerialACIAReadStatus() {
   return ACIA_Status;
 }
 
-// static void HandleData(unsigned char Data)
-// {
-// 	// This proc has to dump data into the serial chip's registers
+function HandleData(Data: number) {
+  // This proc has to dump data into the serial chip's registers
 
-// 	ACIA_Status &= ~MC6850_STATUS_OVRN;
+  ACIA_Status &= ~MC6850_STATUS_OVRN;
 
-// 	if (RxD == 0)
-// 	{
-// 		RDR = Data;
-// 		ACIA_Status |= MC6850_STATUS_RDRF; // Rx Reg full
-// 		RxD++;
-// 	}
-// 	else if (RxD == 1)
-// 	{
-// 		RDSR = Data;
-// 		ACIA_Status |= MC6850_STATUS_RDRF;
-// 		RxD++;
-// 	}
-// 	else if (RxD == 2)
-// 	{
-// 		RDR = RDSR;
-// 		RDSR = Data;
-// 		ACIA_Status |= MC6850_STATUS_OVRN;
-// 	}
+  if (RxD == 0) {
+    RDR = Data;
+    ACIA_Status |= MC6850_STATUS_RDRF; // Rx Reg full
+    RxD++;
+  } else if (RxD == 1) {
+    RDSR = Data;
+    ACIA_Status |= MC6850_STATUS_RDRF;
+    RxD++;
+  } else if (RxD == 2) {
+    RDR = RDSR;
+    RDSR = Data;
+    ACIA_Status |= MC6850_STATUS_OVRN;
+  }
 
-// 	if (RIE)
-// 	{
-// 		// interrupt on receive/overun
-// 		ACIA_Status |= MC6850_STATUS_IRQ;
-// 		intStatus |= 1 << serial;
-// 	}
-// }
+  if (RIE) {
+    // interrupt on receive/overun
+    ACIA_Status |= MC6850_STATUS_IRQ;
+    setIntStatus(getIntStatus() | (1 << IRQ_serial));
+  }
+}
 
 export function SerialACIAReadRxData() {
-  //	if (!DCDI && DCD)
-  //	{
-  //		DCDClear++;
-  //		if (DCDClear > 1) {
-  //			DCD = false;
-  //			ACIA_Status &= ~(1 << MC6850_STATUS_DCS);
-  //			DCDClear = 0;
-  //		}
-  //	}
+  if (!DCDI && DCD) {
+    throw "not impl";
+    // DCDClear++;
+    // if (DCDClear > 1) {
+    // 	DCD = false;
+    // 	ACIA_Status &= ~(1 << MC6850_STATUS_DCS);
+    // 	DCDClear = 0;
+    // }
+  }
 
   ACIA_Status &= ~MC6850_STATUS_IRQ;
-  //intStatus &= ~(1 << serial);
+  setIntStatus(getIntStatus() & ~(1 << IRQ_serial));
 
   let Data = RDR;
   RDR = RDSR;
   RDSR = 0;
 
   if (RxD > 0) {
-    throw "not impl";
-    //RxD--;
+    RxD--;
   }
 
   if (RxD == 0) {
@@ -355,8 +361,8 @@ export function SerialACIAReadRxData() {
 
   if (RxD > 0 && RIE) {
     throw "not impl";
-    // ACIA_Status |= MC6850_STATUS_IRQ;
-    // intStatus |= 1 << serial;
+    ACIA_Status |= MC6850_STATUS_IRQ;
+    setIntStatus(getIntStatus() | (1 << IRQ_serial));
   }
 
   if (DataBits == 7) {
@@ -374,81 +380,128 @@ export function SerialACIAReadRxData() {
 }
 
 export function SerialPoll() {
-  // 	if (SerialChannel == SerialDevice::Cassette)
-  // 	{
-  // 		if (CassetteRelay)
-  // 		{
-  // 			if (UEFFileOpen)
-  // 			{
-  // 				if (TapeClock != OldClock)
-  // 				{
-  // 					UEFBuf = UEFReader.GetData(TapeClock);
-  // 					OldClock = TapeClock;
-  // 				}
-  // 				if (UEFBuf != OldUEFBuf ||
-  // 					UEFRES_TYPE(UEFBuf) == UEF_CARRIER_TONE ||
-  // 					UEFRES_TYPE(UEFBuf) == UEF_GAP)
-  // 				{
-  // 					OldUEFBuf = UEFBuf;
-  // 					// New data read in, so do something about it
-  // 					switch (UEFRES_TYPE(UEFBuf))
-  // 					{
-  // 						case UEF_CARRIER_TONE:
-  // 							DCDI = true;
-  // 							TapeAudio.Signal = 2;
-  // 							// TapeAudio.Samples = 0;
-  // 							TapeAudio.BytePos = 11;
-  // 							break;
-  // 						case UEF_GAP:
-  // 							DCDI = true;
-  // 							TapeAudio.Signal = 0;
-  // 							break;
-  // 						case UEF_DATA: {
-  // 							DCDI = false;
-  // 							unsigned char Data = UEFRES_BYTE(UEFBuf);
-  // 							HandleData(Data);
-  // 							TapeAudio.Data       = (Data << 1) | 1;
-  // 							TapeAudio.BytePos    = 1;
-  // 							TapeAudio.CurrentBit = 0;
-  // 							TapeAudio.Signal     = 1;
-  // 							TapeAudio.ByteCount  = 3;
-  // 							break;
-  // 						}
-  // 					}
-  // 				}
-  // 				if (RxD < 2)
-  // 				{
-  // 					if (TotalCycles >= TapeTrigger)
-  // 					{
-  // 						TapeClock++;
-  // 						SetTrigger(TAPECYCLES, TapeTrigger);
-  // 					}
-  // 				}
-  // 			}
-  // 			if (DCDI != ODCDI)
-  // 			{
-  // 				if (DCDI)
-  // 				{
-  // 					// Low to high transition on the DCD line
-  // 					if (RIE)
-  // 					{
-  // 						ACIA_Status |= MC6850_STATUS_IRQ;
-  // 						intStatus |= 1 << serial;
-  // 					}
-  // 					DCD = true;
-  // 					ACIA_Status |= MC6850_STATUS_DCD; // ACIA_Status &= ~MC6850_STATUS_RDRF;
-  // 					// DCDClear = 0;
-  // 				}
-  // 				else // !DCDI
-  // 				{
-  // 					DCD = false;
-  // 					ACIA_Status &= ~MC6850_STATUS_DCD;
-  // 					// DCDClear = 0;
-  // 				}
-  // 				ODCDI = DCDI;
-  // 			}
-  // 		}
-  // 	}
+  const TapeAudio = getTapeAudio();
+  if (SerialChannel == "cassette") {
+    if (CassetteRelay) {
+      // 			if (UEFFileOpen)
+      // 			{
+      // 				if (TapeClock != OldClock)
+      // 				{
+      // 					UEFBuf = UEFReader.GetData(TapeClock);
+      // 					OldClock = TapeClock;
+      // 				}
+      // 				if (UEFBuf != OldUEFBuf ||
+      // 					UEFRES_TYPE(UEFBuf) == UEF_CARRIER_TONE ||
+      // 					UEFRES_TYPE(UEFBuf) == UEF_GAP)
+      // 				{
+      // 					OldUEFBuf = UEFBuf;
+      // 					// New data read in, so do something about it
+      // 					switch (UEFRES_TYPE(UEFBuf))
+      // 					{
+      // 						case UEF_CARRIER_TONE:
+      // 							DCDI = true;
+      // 							TapeAudio.Signal = 2;
+      // 							// TapeAudio.Samples = 0;
+      // 							TapeAudio.BytePos = 11;
+      // 							break;
+      // 						case UEF_GAP:
+      // 							DCDI = true;
+      // 							TapeAudio.Signal = 0;
+      // 							break;
+      // 						case UEF_DATA: {
+      // 							DCDI = false;
+      // 							unsigned char Data = UEFRES_BYTE(UEFBuf);
+      // 							HandleData(Data);
+      // 							TapeAudio.Data       = (Data << 1) | 1;
+      // 							TapeAudio.BytePos    = 1;
+      // 							TapeAudio.CurrentBit = 0;
+      // 							TapeAudio.Signal     = 1;
+      // 							TapeAudio.ByteCount  = 3;
+      // 							break;
+      // 						}
+      // 					}
+      // 				}
+      // 				if (RxD < 2)
+      // 				{
+      // 					if (TotalCycles >= TapeTrigger)
+      // 					{
+      // 						TapeClock++;
+      // 						SetTrigger(TAPECYCLES, TapeTrigger);
+      // 					}
+      // 				}
+      // 			}
+
+      //else
+      if (CSWFileOpen) {
+        if (TapeClock != OldClock) {
+          const csw_state = getCSWState();
+          let last_state = csw_state;
+
+          const Data = CSWPoll();
+          OldClock = TapeClock;
+
+          if (last_state != csw_state) {
+            throw "not impl";
+            //TapeControlUpdateCounter(csw_ptr);
+          }
+
+          switch (csw_state) {
+            case "WaitingForTone":
+              DCDI = true;
+              TapeAudio.Signal = 0;
+              break;
+
+            case "Tone":
+              DCDI = true;
+              TapeAudio.Signal = 2;
+              TapeAudio.BytePos = 11;
+              break;
+
+            case "Data":
+              if (Data >= 0) {
+                // New data read in, so do something about it
+                DCDI = false;
+                HandleData(Data);
+
+                TapeAudio.Data = (Data << 1) | 1;
+                TapeAudio.BytePos = 1;
+                TapeAudio.CurrentBit = 0;
+                TapeAudio.Signal = 1;
+                TapeAudio.ByteCount = 3;
+              }
+              break;
+          }
+        }
+
+        if (RxD < 2) {
+          if (getTotalCycles() >= TapeTrigger) {
+            if (TapePlaying) TapeClock++;
+
+            TapeTrigger = SetTrigger(getCSWPollCycles());
+          }
+        }
+      }
+
+      if (DCDI != ODCDI) {
+        if (DCDI) {
+          // Low to high transition on the DCD line
+          if (RIE) {
+            ACIA_Status |= MC6850_STATUS_IRQ;
+            setIntStatus(getIntStatus() | (1 << IRQ_serial));
+          }
+          DCD = true;
+          ACIA_Status |= MC6850_STATUS_DCD; // ACIA_Status &= ~MC6850_STATUS_RDRF;
+          // DCDClear = 0;
+        } // !DCDI
+        else {
+          DCD = false;
+          ACIA_Status &= ~MC6850_STATUS_DCD;
+          // DCDClear = 0;
+        }
+        ODCDI = DCDI;
+      }
+    }
+  }
 }
 
 // static void CloseUEFFile()
@@ -460,10 +513,38 @@ export function SerialPoll() {
 // 	}
 // }
 
+function CloseCSWFile() {
+  if (CSWFileOpen) {
+    CSWClose();
+    CSWFileOpen = false;
+  }
+}
+
 // void SerialClose()
 // {
 // 	CloseTape();
 // }
+
+export async function LoadCSWTape(FileName: string) {
+  CloseTape();
+
+  await CSWOpen(FileName);
+
+  CSWFileOpen = true;
+  // //strcpy(TapeFileName, FileName);
+  // //TxD = 0;
+  RxD = 0;
+  TapeClock = 0;
+  OldClock = 0;
+  TapeTrigger = SetTrigger(getCSWPollCycles());
+  CSWCreateTapeMap();
+  setCSWptr(0);
+
+  // if (TapeControlEnabled)
+  // {
+  // 	TapeControlAddMapLines(csw_ptr);
+  // }
+}
 
 // UEFResult LoadUEFTape(const char *FileName)
 // {
@@ -492,14 +573,14 @@ export function SerialPoll() {
 // 	return Result;
 // }
 
-// void CloseTape()
-// {
-// 	CloseUEFFile();
+function CloseTape() {
+  //CloseUEFFile();
+  CloseCSWFile();
 
-// 	RxD = 0;
+  RxD = 0;
 
-// 	TapeFileName[0] = '\0';
-// }
+  //TapeFileName[0] = '\0';
+}
 
 // void RewindTape()
 // {

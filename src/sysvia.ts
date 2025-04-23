@@ -340,11 +340,10 @@ export function SysVIAWrite(Address: number, Value: number) {
       break;
 
     case 1:
-      throw "not impl";
-      // SysVIAState.ora = Value;
-      // SlowDataBusWrite(Value);
-      // SysVIAState.ifr&=0xfc;
-      // UpdateIFRTopBit();
+      SysVIAState.ora = Value;
+      SlowDataBusWrite(Value);
+      SysVIAState.ifr &= 0xfc;
+      UpdateIFRTopBit();
       break;
 
     case 2:
@@ -493,17 +492,19 @@ export function SysVIARead(Address: number) {
     case 7 /* Timer 1 hi latch */:
       tmp = (SysVIAState.timer1l >> 8) & 0xff; //K.Lowe
       break;
-    //     case 8: /* Timer 2 lo counter */
-    //       if (SysVIAState.timer2c < 0) /* Adjust for dividing -ve count by 2 */
-    //         tmp=((SysVIAState.timer2c - 1) / 2) & 0xff;
-    //       else
-    //         tmp=(SysVIAState.timer2c / 2) & 0xff;
-    //       SysVIAState.ifr&=0xdf; /* Clear bit 5 - timer 2 */
-    //       UpdateIFRTopBit();
-    //       break;
-    //     case 9: /* Timer 2 hi counter */
-    //       tmp = (SysVIAState.timer2c>>9) & 0xff; //K.Lowe
-    //       break;
+    case 8 /* Timer 2 lo counter */:
+      if (SysVIAState.timer2c < 0) {
+        /* Adjust for dividing -ve count by 2 */
+        tmp = ((SysVIAState.timer2c - 1) / 2) & 0xff;
+      } else {
+        tmp = (SysVIAState.timer2c / 2) & 0xff;
+      }
+      SysVIAState.ifr &= 0xdf; /* Clear bit 5 - timer 2 */
+      UpdateIFRTopBit();
+      break;
+    case 9 /* Timer 2 hi counter */:
+      tmp = (SysVIAState.timer2c >> 9) & 0xff; //K.Lowe
+      break;
     //     case 10:
     //       tmp = SRData;
     //       break;

@@ -130,6 +130,13 @@ export function write8UChars(vidPtr: number, eightUChars: EightUChars) {
 export function write16UChars(vidPtr: number, sixteenUChars: SixteenUChars) {
   const screen = getScreen();
 
+  if (!sixteenUChars) {
+    console.warn("write16UChars empty eightUChars");
+    for (let i = 0; i < 16; i++) {
+      screen[vidPtr++] = 0;
+    }
+    return vidPtr;
+  }
   for (let i = 0; i < 16; i++) {
     screen[vidPtr++] = sixteenUChars[i];
   }

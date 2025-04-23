@@ -8,7 +8,7 @@ export async function fetchDiscImage(fileName: string) {
   if (res.headers.get("content-type") === "application/zip") {
     const zipFileHeaders = getZipFileHeaders(responseBuffer);
 
-    const ssdFileHeader = findSsdFileHeader(zipFileHeaders);
+    const ssdFileHeader = findFileHeaderByExtension(zipFileHeaders, ".ssd");
 
     if (!ssdFileHeader) throw "no ssd found in zip";
 
@@ -18,8 +18,30 @@ export async function fetchDiscImage(fileName: string) {
   }
 }
 
-function findSsdFileHeader(zipFileHeaders: ZipFileHeader[]) {
+export async function fetchTape(fileName: string) {
+  const res = await fetch(fileName, { referrerPolicy: "no-referrer" });
+
+  const responseBuffer = await res.arrayBuffer();
+
+  if (res.headers.get("content-type") === "application/zip") {
+    const zipFileHeaders = getZipFileHeaders(responseBuffer);
+
+    const cswFileHeader = findFileHeaderByExtension(zipFileHeaders, ".csw");
+
+    if (!cswFileHeader) throw "no csw found in zip";
+
+    return await zipExtractFile(responseBuffer, cswFileHeader);
+  } else {
+    return responseBuffer;
+  }
+}
+
+function findFileHeaderByExtension(
+  zipFileHeaders: ZipFileHeader[],
+  extension: string,
+) {
   return zipFileHeaders.find(
-    header => header.uncompressedSize > 0 && header.filename.endsWith(".ssd"),
+    header =>
+      header.uncompressedSize > 0 && header.filename.endsWith(extension),
   );
 }

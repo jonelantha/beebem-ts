@@ -1328,7 +1328,6 @@ export function Disc8271Write(Address: number, Value: number) {
       break;
 
     case 2:
-      throw "not impl";
       // DebugTrace("8271: Reset register write, value=0x%02X\n", Value);
 
       // The caller should write a 1 and then >11 cycles later a 0 - but I'm just going

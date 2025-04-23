@@ -18,6 +18,10 @@ If so, please try https://github.com/mattgodbolt/jsbeeb
 
 - `disc` - url of **.ssd** (or a zip containing an **.ssd** file) to Shift Boot from
   - _hint: try using archive urls from https://www.stairwaytohell.com_
+- `tape` - url of **.csw** (or a zip containing an **.csw** file) to mount a tape image from
+  - To load from tape you'll need to enter the following in BASIC:
+    - `*TAPE`
+    - `CHAIN ""`
 - `keyMapping` - **logical** or **default**
   - Want to type something in BASIC? Use **logical**
   - Want to play a game? Use **default**
