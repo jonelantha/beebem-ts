@@ -717,16 +717,16 @@ function LowLevelDoScanLineNarrow() {
 /* This version handles screen modes where there is not a multiple of 4     */
 /* bytes per scanline.                                                      */
 function LowLevelDoScanLineNarrowNot4Bytes() {
-  throw "not impl";
-  // int BytesToGo=CRTC_HorizontalDisplayed;
-  // EightUChars *vidPtr=mainWin->GetLinePtr(VideoState.PixmapLine);
+  const dataBuf = VideoState.DataBuf!;
+  let BytesToGo = CRTC_HorizontalDisplayed;
+  let vidPtr = GetLinePtr(VideoState.PixmapLine);
 
-  // /* If the step is 4 then each byte corresponds to one entry in the fasttable
-  //    and thus we can copy it really easily (and fast!) */
-  // const unsigned char *CurrentPtr = VideoState.DataPtr + VideoState.InCharLineUp;
+  /* If the step is 4 then each byte corresponds to one entry in the fasttable
+     and thus we can copy it really easily (and fast!) */
+  let CurrentPtr = VideoState.InCharLineUp;
 
-  // for(;BytesToGo;CurrentPtr+=8,BytesToGo--)
-  //   (vidPtr++)->eightbyte=FastTable[*CurrentPtr].eightbyte;
+  for (; BytesToGo; CurrentPtr += 8, BytesToGo--)
+    vidPtr = write8UChars(vidPtr, FastTable[dataBuf[CurrentPtr]]);
 }
 
 /*-----------------------------------------------------------------------------*/
@@ -1425,7 +1425,6 @@ export function CRTCRead(Address: number) {
         throw "not impl";
         return CRTC_ScreenStartLow;
       case 14:
-        throw "not impl";
         return CRTC_CursorPosHigh;
       case 15:
         return CRTC_CursorPosLow;

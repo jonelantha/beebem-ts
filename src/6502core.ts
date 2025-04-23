@@ -345,11 +345,13 @@ function SetPSRCZN(c: 1 | 0, z: 1 | 0, n: 1 | 0) {
 function Push(ToPush: number) {
   BEEBWRITEMEM_DIRECT(0x100 + StackReg, ToPush);
   StackReg--;
+  if (StackReg < 0) StackReg = 0xff;
 } /* Push */
 
 /*----------------------------------------------------------------------------*/
 function Pop() {
   StackReg++;
+  if (StackReg > 0xff) StackReg = 0;
   return BEEBREADMEM_DIRECT(0x100 + StackReg);
 } /* Pop */
 
@@ -1413,10 +1415,10 @@ export function Exec6502Instruction() {
       // 			// Undocumented instruction: NOP zp,X
       // 			ZeroPgXAddrModeHandler_Address();
       // 			break;
-      // 		case 0x35:
-      // 			// AND zp,X
-      // 			ANDInstrHandler(ZeroPgXAddrModeHandler_Data());
-      // 			break;
+      case 0x35:
+        // AND zp,X
+        ANDInstrHandler(ZeroPgXAddrModeHandler_Data());
+        break;
       // 		case 0x36:
       // 			// ROL zp,X
       // 			ROLInstrHandler(ZeroPgXAddrModeHandler_Address());
