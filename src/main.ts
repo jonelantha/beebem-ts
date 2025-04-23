@@ -28,6 +28,7 @@ import {
 } from "./beebwin";
 import { Exec6502Instruction } from "./6502core";
 import { BeebReleaseAllKeys } from "./sysvia";
+import { LoadCSWTape } from "./serial";
 
 (async function run() {
   document.addEventListener("keydown", evt => {
@@ -58,6 +59,14 @@ import { BeebReleaseAllKeys } from "./sysvia";
   const discImage = params.get("disc") ?? "";
 
   discImage && (await DoShiftBreak(discImage));
+
+  const tape = params.get("tape") ?? "";
+
+  try {
+    tape && (await LoadCSWTape(tape));
+  } catch (error) {
+    console.error(error);
+  }
 
   while (true) {
     const sleepTime = Exec6502Instruction();

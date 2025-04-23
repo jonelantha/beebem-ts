@@ -36,6 +36,16 @@ export const SAMPLE_HEAD_SEEK_CYCLES_PER_TRACK = 48333; // 0.02415s per track in
 export const SAMPLE_HEAD_STEP_CYCLES = 100000; // 0.05s sound file
 export const SAMPLE_HEAD_LOAD_CYCLES = 400000; // 0.2s sound file
 
+type AudioType = {
+  Signal: number; // Signal type: data, gap, or tone.
+  BytePos: number; // Position in data byte
+  Enabled: boolean; // Enable state of audio deooder
+  Data: number; // The actual data itself
+  Samples: number; // Samples counted in current pattern till changepoint
+  CurrentBit: number; // Current bit in data being processed
+  ByteCount: number; // Byte repeat counter
+};
+
 // main
 
 const SOUND_SAMPLE_RATE = 44100;
@@ -87,6 +97,17 @@ const GenIndex = [0, 0, 0, 0]; /* unsigned int Used by the voice generators */
 const GenState = [0, 0, 0, 0]; // int
 let bufptr = 0; // int
 let SoundTuning = 0.0; // double Tuning offset
+
+const TapeAudio: AudioType = {
+  Signal: 0,
+  BytePos: 0,
+  Enabled: false,
+  Data: 0,
+  Samples: 0,
+  CurrentBit: 0,
+  ByteCount: 0,
+}; // Tape audio decoder stuff
+export const getTapeAudio = () => TapeAudio;
 
 /****************************************************************************/
 /* Writes sound data to a sound buffer */
@@ -292,27 +313,42 @@ function PlayUpTil(DestTime: number) {
       // 			}
 
       // 			if (TAPE_SOUND_ENABLED) {
-      // 				// Mix in tape sound here
-      // 				int tapetotal = 0;
+      // Mix in tape sound here
+      let tapetotal = 0;
 
-      // 				if ((TapeAudio.Enabled) && (TapeAudio.Signal==2)) {
-      // 					if (TapeAudio.Samples++>=36) TapeAudio.Samples=0;
-      // 					tapetotal=(int)(sin(((TapeAudio.Samples*20)*3.14)/180)*20);
-      // 				}
-      // 				if ((TapeAudio.Enabled) && (TapeAudio.Signal==1)) {
-      // 					tapetotal=(int)(sin(((TapeAudio.Samples*(10*(1+TapeAudio.CurrentBit)))*3.14)/180)*(20+(10*(1-TapeAudio.CurrentBit))));
-      // 					// And if you can follow that equation, "ill give you the money meself" - Richard Gellman
-      // 					if (TapeAudio.Samples++>=36) {
-      // 						TapeAudio.Samples=0;
-      // 						TapeAudio.BytePos++;
-      // 						if (TapeAudio.BytePos<=10) TapeAudio.CurrentBit=(TapeAudio.Data & (1<<(10-TapeAudio.BytePos)))?1:0;
-      // 					}
-      // 					if (TapeAudio.BytePos>10) {
-      // 						TapeAudio.ByteCount--;
-      // 						if (!TapeAudio.ByteCount) TapeAudio.Signal=2; else { TapeAudio.BytePos=1; TapeAudio.CurrentBit=0; }
-      // 					}
-      // 				}
-      // 				tmptotal+=tapetotal;
+      if (TapeAudio.Enabled && TapeAudio.Signal == 2) {
+        if (TapeAudio.Samples++ >= 36) TapeAudio.Samples = 0;
+        tapetotal = Math.floor(
+          Math.sin((TapeAudio.Samples * 20 * Math.PI) / 180) * 20,
+        );
+      }
+      if (TapeAudio.Enabled && TapeAudio.Signal == 1) {
+        tapetotal = Math.floor(
+          Math.sin(
+            (TapeAudio.Samples * (10 * (1 + TapeAudio.CurrentBit)) * Math.PI) /
+              180,
+          ) *
+            (20 + 10 * (1 - TapeAudio.CurrentBit)),
+        );
+        // And if you can follow that equation, "ill give you the money meself" - Richard Gellman
+        if (TapeAudio.Samples++ >= 36) {
+          TapeAudio.Samples = 0;
+          TapeAudio.BytePos++;
+          if (TapeAudio.BytePos <= 10)
+            TapeAudio.CurrentBit =
+              TapeAudio.Data & (1 << (10 - TapeAudio.BytePos)) ? 1 : 0;
+        }
+        if (TapeAudio.BytePos > 10) {
+          TapeAudio.ByteCount--;
+          if (!TapeAudio.ByteCount) {
+            TapeAudio.Signal = 2;
+          } else {
+            TapeAudio.BytePos = 1;
+            TapeAudio.CurrentBit = 0;
+          }
+        }
+      }
+      tmptotal += tapetotal;
       // 			}
 
       // Reduce amplitude to reduce clipping
