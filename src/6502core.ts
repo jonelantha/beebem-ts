@@ -1568,10 +1568,10 @@ export function Exec6502Instruction() {
         // EOR zp,X
         EORInstrHandler(ZeroPgXAddrModeHandler_Data());
         break;
-      // 		case 0x56:
-      // 			// LSR zp,X
-      // 			LSRInstrHandler(ZeroPgXAddrModeHandler_Address());
-      // 			break;
+      case 0x56:
+        // LSR zp,X
+        LSRInstrHandler(ZeroPgXAddrModeHandler_Address());
+        break;
       // 		case 0x57: {
       // 				// Undocumented instruction: SRE zp,X
       // 				int ZeroPageAddress = ZeroPgXAddrModeHandler_Address();
