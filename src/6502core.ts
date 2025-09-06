@@ -1610,10 +1610,10 @@ export function Exec6502Instruction() {
         // EOR abs,X
         EORInstrHandler(AbsXAddrModeHandler_Data());
         break;
-      // 		case 0x5e:
-      // 			// LSR abs,X
-      // 			LSRInstrHandler(AbsXAddrModeHandler_Address());
-      // 			break;
+      case 0x5e:
+        // LSR abs,X
+        LSRInstrHandler(AbsXAddrModeHandler_Address());
+        break;
       // 		case 0x5f: {
       // 				// Undocumented instruction: SRE abs,X
       // 				int Address = AbsXAddrModeHandler_Address();

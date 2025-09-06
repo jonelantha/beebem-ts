@@ -92,7 +92,6 @@ export function UserVIAWrite(Address: number, Value: number) {
 
   switch (Address) {
     case 0:
-      throw "not impl";
       UserVIAState.orb = Value;
 
       if (UserVIAState.ifr & 8 && (UserVIAState.pcr & 0x20) == 0) {
