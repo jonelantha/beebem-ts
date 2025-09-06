@@ -82,7 +82,7 @@ export function doHorizLine(
 ) {
   const screen = getScreen();
 
-  if (getTeletextEnabled()) y /= getTeletextStyle();
+  if (getTeletextEnabled()) y = Math.floor(y / getTeletextStyle());
   const d = y * 800 + sx + getScreenAdjust() + (getTeletextEnabled() ? 36 : 0);
   if (d + width > 500 * 800) return;
   if (d < 0) return;
@@ -97,7 +97,7 @@ export function doInvHorizLine(
 ) {
   const screen = getScreen();
 
-  if (getTeletextEnabled()) y /= getTeletextStyle();
+  if (getTeletextEnabled()) y = Math.floor(y / getTeletextStyle());
   const d = y * 800 + sx + getScreenAdjust() + (getTeletextEnabled() ? 36 : 0);
   if (d + width > 500 * 800) return;
   if (d < 0) return;
