@@ -46,7 +46,7 @@ import {
   setCSWptr,
 } from "./csw";
 import { CycleCountTMax } from "./port";
-import { getTapeAudio } from "./sound";
+import { ClickRelay, getTapeAudio } from "./sound";
 
 export const AdjustTriggerTape = (max: number, wrap: number) => {
   if (TapeTrigger != max) TapeTrigger -= wrap;
@@ -268,7 +268,7 @@ export function SerialULAWrite(Value: number) {
 
   if (CassetteRelay != OldRelayState) {
     OldRelayState = CassetteRelay;
-    //ClickRelay(CassetteRelay);
+    ClickRelay(CassetteRelay);
   }
 
   SerialChannel = (Value & 0x40) != 0 ? "rs423" : "cassette";

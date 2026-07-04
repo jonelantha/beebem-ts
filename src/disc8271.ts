@@ -38,9 +38,16 @@ import { get_m_ShiftBooted, set_m_ShiftBooted } from "./beebwin";
 import { fetchDiscImage } from "./fetcher";
 import { CycleCountTMax } from "./port";
 import {
+  PlaySoundSample,
+  SAMPLE_DRIVE_MOTOR,
+  SAMPLE_HEAD_LOAD,
   SAMPLE_HEAD_LOAD_CYCLES,
+  SAMPLE_HEAD_SEEK,
   SAMPLE_HEAD_SEEK_CYCLES_PER_TRACK,
+  SAMPLE_HEAD_STEP,
   SAMPLE_HEAD_STEP_CYCLES,
+  SAMPLE_HEAD_UNLOAD,
+  StopSoundSample,
 } from "./sound";
 import { BeebKeyUp } from "./sysvia";
 
@@ -1377,11 +1384,11 @@ function DriveHeadMotorUpdate() {
     Selects[1] = false;
     DriveHeadUnloadPending = false;
     if (DriveHeadLoaded && DISC_SOUND_ENABLED) {
-      // 	PlaySoundSample(SAMPLE_HEAD_UNLOAD, false);
+      PlaySoundSample(SAMPLE_HEAD_UNLOAD, false);
     }
     DriveHeadLoaded = false;
-    // StopSoundSample(SAMPLE_DRIVE_MOTOR);
-    // StopSoundSample(SAMPLE_HEAD_SEEK);
+    StopSoundSample(SAMPLE_DRIVE_MOTOR);
+    StopSoundSample(SAMPLE_HEAD_SEEK);
 
     // LEDs.Disc0 = false;
     // LEDs.Disc1 = false;
@@ -1397,9 +1404,9 @@ function DriveHeadMotorUpdate() {
     // if (Selects[0]) LEDs.Disc0 = true;
     // if (Selects[1]) LEDs.Disc1 = true;
 
-    //PlaySoundSample(SAMPLE_DRIVE_MOTOR, true);
+    PlaySoundSample(SAMPLE_DRIVE_MOTOR, true);
     DriveHeadLoaded = true;
-    //PlaySoundSample(SAMPLE_HEAD_LOAD, false);
+    PlaySoundSample(SAMPLE_HEAD_LOAD, false);
     Disc8271Trigger = SetTrigger(SAMPLE_HEAD_LOAD_CYCLES);
     return true;
   }
@@ -1407,15 +1414,15 @@ function DriveHeadMotorUpdate() {
   if (Selects[0]) Drive = 0;
   if (Selects[1]) Drive = 1;
 
-  // StopSoundSample(SAMPLE_HEAD_SEEK);
+  StopSoundSample(SAMPLE_HEAD_SEEK);
 
   if (DriveHeadPosition[Drive] != Internal_CurrentTrack[Drive]) {
     Tracks = Math.abs(DriveHeadPosition[Drive] - Internal_CurrentTrack[Drive]);
     if (Tracks > 1) {
-      //PlaySoundSample(SAMPLE_HEAD_SEEK, true);
+      PlaySoundSample(SAMPLE_HEAD_SEEK, true);
       Disc8271Trigger = SetTrigger(Tracks * SAMPLE_HEAD_SEEK_CYCLES_PER_TRACK);
     } else {
-      //PlaySoundSample(SAMPLE_HEAD_STEP, false);
+      PlaySoundSample(SAMPLE_HEAD_STEP, false);
       Disc8271Trigger = SetTrigger(SAMPLE_HEAD_STEP_CYCLES);
     }
     if (DriveHeadPosition[Drive] < Internal_CurrentTrack[Drive])

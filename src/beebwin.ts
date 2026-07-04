@@ -107,7 +107,7 @@ async function ResetBeebSystem(
   discImage: string | undefined,
 ) {
   SoundReset();
-  SoundInit();
+  await SoundInit();
   SwitchOnSound();
   await BeebMemInit(LoadRoms);
   Init6502core();

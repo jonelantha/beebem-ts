@@ -32,6 +32,14 @@ import { CycleCountWrap } from "./port";
 
 export const SOUNDSUPPORT = true;
 
+export const SAMPLE_RELAY_ON = 0;
+export const SAMPLE_RELAY_OFF = 1;
+export const SAMPLE_DRIVE_MOTOR = 2;
+export const SAMPLE_HEAD_LOAD = 3;
+export const SAMPLE_HEAD_UNLOAD = 4;
+export const SAMPLE_HEAD_SEEK = 5;
+export const SAMPLE_HEAD_STEP = 6;
+
 export const SAMPLE_HEAD_SEEK_CYCLES_PER_TRACK = 48333; // 0.02415s per track in the sound file
 export const SAMPLE_HEAD_STEP_CYCLES = 100000; // 0.05s sound file
 export const SAMPLE_HEAD_LOAD_CYCLES = 400000; // 0.2s sound file
@@ -51,12 +59,33 @@ type AudioType = {
 const SOUND_SAMPLE_RATE = 44100;
 const SOUND_EXPONENTIAL_VOLUME = true;
 const PART_SAMPLES = true;
+//const TAPE_SOUND_ENABLED = true;
+const RELAY_SOUND_ENABLED = true;
 const SOUND_CHIP_ENABLED = true;
 
 const MAXBUFSIZE = 32768;
 
 const SoundBuf = new Uint8Array(MAXBUFSIZE);
 
+type SoundSample = {
+  filename: string;
+  buf?: Uint8Array;
+  pos: number;
+  playing: boolean;
+  repeat: boolean;
+};
+
+const SoundSamples: SoundSample[] = [
+  { filename: "RelayOn.snd", pos: 0, playing: false, repeat: false },
+  { filename: "RelayOff.snd", pos: 0, playing: false, repeat: false },
+  { filename: "DriveMotor.snd", pos: 0, playing: false, repeat: false },
+  { filename: "HeadLoad.snd", pos: 0, playing: false, repeat: false },
+  { filename: "HeadUnload.snd", pos: 0, playing: false, repeat: false },
+  { filename: "HeadSeek.snd", pos: 0, playing: false, repeat: false },
+  { filename: "HeadStep.snd", pos: 0, playing: false, repeat: false },
+];
+
+let SoundSamplesLoaded = false;
 let SoundAutoTriggerTime = 0;
 let SoundBufferSize = SOUND_SAMPLE_RATE / 50; // int
 
@@ -298,19 +327,17 @@ function PlayUpTil(DestTime: number) {
 
       tmptotal = Math.trunc(tmptotal / 4);
 
-      // 			// Mix in sound samples here
-      // 			for (int i = 0; i < NUM_SOUND_SAMPLES; ++i) {
-      // 				if (SoundSamples[i].playing) {
-      // 					tmptotal+=(SoundSamples[i].pBuf[SoundSamples[i].pos]-128)*2;
-      // 					SoundSamples[i].pos += 44100 / SOUND_SAMPLE_RATE;
-      // 					if (SoundSamples[i].pos >= SoundSamples[i].len) {
-      // 						if (SoundSamples[i].repeat)
-      // 							SoundSamples[i].pos = 0;
-      // 						else
-      // 							SoundSamples[i].playing = false;
-      // 					}
-      // 				}
-      // 			}
+      // Mix in sound samples here
+      for (let i = 0; i < SoundSamples.length; ++i) {
+        if (SoundSamples[i].playing) {
+          tmptotal += (SoundSamples[i].buf![SoundSamples[i].pos] - 128) * 2;
+          SoundSamples[i].pos += 44100 / SOUND_SAMPLE_RATE;
+          if (SoundSamples[i].pos >= SoundSamples[i].buf!.length) {
+            if (SoundSamples[i].repeat) SoundSamples[i].pos = 0;
+            else SoundSamples[i].playing = false;
+          }
+        }
+      }
 
       // 			if (TAPE_SOUND_ENABLED) {
       // Mix in tape sound here
@@ -419,57 +446,20 @@ function CyclesToSamples(BeebCycles: number) {
 }
 
 /****************************************************************************/
-/* Called in sysvia.cpp when a write is made to the 76489 sound chip        */
-/**
- * @param value int
- */
-export function Sound_RegWrite(value: number) {
-  let reg = 0,
-    tone = 0,
-    channel = 0; // may not be tone, why not index volume and tone with the same index?
 
-  if (value & 0x80) {
-    reg = (value >> 4) & 7;
-    BeebState76489.LastToneFreqSet = (2 - (reg >> 1)) & 3; // use 3 for noise (0,1->2, 2,3->1, 4,5->0, 6,7->3)
-    tone =
-      (BeebState76489.ToneFreq[BeebState76489.LastToneFreqSet] & ~15) |
-      (value & 15);
-  } else {
-    reg = ((2 - BeebState76489.LastToneFreqSet) & 3) << 1; // (0->4, 1->2, 2->0, 3->6)
-    tone =
-      (BeebState76489.ToneFreq[BeebState76489.LastToneFreqSet] & 15) |
-      ((value & 0x3f) << 4);
+async function LoadSoundSamples() {
+  if (!SoundSamplesLoaded) {
+    for (let i = 0; i < SoundSamples.length; ++i) {
+      const res = await fetch(`sounds/${SoundSamples[i].filename}`);
+      if (!res.ok)
+        throw new Error(
+          `Failed to load sound sample: ${SoundSamples[i].filename}`,
+        );
+
+      SoundSamples[i].buf = new Uint8Array(await res.arrayBuffer());
+    }
+    SoundSamplesLoaded = true;
   }
-
-  channel = (1 + BeebState76489.LastToneFreqSet) & 3; // (0->1, 1->2, 2->3, 3->0)
-
-  switch (reg) {
-    case 0: // Tone 3 freq
-    case 2: // Tone 2 freq
-    case 4: // Tone 1 freq
-      BeebState76489.ToneFreq[BeebState76489.LastToneFreqSet] = tone;
-      SetFreq(channel, tone);
-      break;
-
-    case 6: // Noise control
-      BeebState76489.Noise.Freq = value & 3;
-      BeebState76489.Noise.FB = (value >> 2) & 1;
-      break;
-
-    case 1: // Tone 3 vol
-    case 3: // Tone 2 vol
-    case 5: // Tone 1 vol
-    case 7: // Tone 0 vol
-      RealVolumes[channel] = value & 15;
-      if (BeebState76489.ToneVolume[channel] == 0 && (value & 15) != 15)
-        ActiveChannel[channel] = true;
-      if (BeebState76489.ToneVolume[channel] != 0 && (value & 15) == 15)
-        ActiveChannel[channel] = false;
-      BeebState76489.ToneVolume[channel] = GetVol(15 - (value & 15));
-      break;
-  }
-
-  UpdateSound();
 }
 
 /****************************************************************************/
@@ -540,7 +530,7 @@ export function SoundPoll() {
 
 /****************************************************************************/
 /* Called to enable sound output                                            */
-export function SoundInit() {
+export async function SoundInit() {
   SoundTrigger = ClearTrigger();
   LastBeebCycle = getTotalCycles();
   LastOurTime = (LastBeebCycle * SOUND_SAMPLE_RATE) / 2000000.0;
@@ -553,7 +543,7 @@ export function SoundInit() {
   if (SOUND_SAMPLE_RATE == 11025) SoundAutoTriggerTime = 20000;*/
   SoundBufferSize =
     /*pSoundStreamer ? pSoundStreamer->BufferSize() :*/ SOUND_SAMPLE_RATE / 50;
-  //LoadSoundSamples();
+  await LoadSoundSamples();
   SoundTrigger = getTotalCycles() + SoundAutoTriggerTime;
 }
 
@@ -585,6 +575,83 @@ export function SoundReset() {
   //   }
 
   SoundTrigger = ClearTrigger();
+}
+
+/****************************************************************************/
+/* Called in sysvia.cpp when a write is made to the 76489 sound chip        */
+/**
+ * @param value int
+ */
+export function Sound_RegWrite(value: number) {
+  let reg = 0,
+    tone = 0,
+    channel = 0; // may not be tone, why not index volume and tone with the same index?
+
+  if (value & 0x80) {
+    reg = (value >> 4) & 7;
+    BeebState76489.LastToneFreqSet = (2 - (reg >> 1)) & 3; // use 3 for noise (0,1->2, 2,3->1, 4,5->0, 6,7->3)
+    tone =
+      (BeebState76489.ToneFreq[BeebState76489.LastToneFreqSet] & ~15) |
+      (value & 15);
+  } else {
+    reg = ((2 - BeebState76489.LastToneFreqSet) & 3) << 1; // (0->4, 1->2, 2->0, 3->6)
+    tone =
+      (BeebState76489.ToneFreq[BeebState76489.LastToneFreqSet] & 15) |
+      ((value & 0x3f) << 4);
+  }
+
+  channel = (1 + BeebState76489.LastToneFreqSet) & 3; // (0->1, 1->2, 2->3, 3->0)
+
+  switch (reg) {
+    case 0: // Tone 3 freq
+    case 2: // Tone 2 freq
+    case 4: // Tone 1 freq
+      BeebState76489.ToneFreq[BeebState76489.LastToneFreqSet] = tone;
+      SetFreq(channel, tone);
+      break;
+
+    case 6: // Noise control
+      BeebState76489.Noise.Freq = value & 3;
+      BeebState76489.Noise.FB = (value >> 2) & 1;
+      break;
+
+    case 1: // Tone 3 vol
+    case 3: // Tone 2 vol
+    case 5: // Tone 1 vol
+    case 7: // Tone 0 vol
+      RealVolumes[channel] = value & 15;
+      if (BeebState76489.ToneVolume[channel] == 0 && (value & 15) != 15)
+        ActiveChannel[channel] = true;
+      if (BeebState76489.ToneVolume[channel] != 0 && (value & 15) == 15)
+        ActiveChannel[channel] = false;
+      BeebState76489.ToneVolume[channel] = GetVol(15 - (value & 15));
+      break;
+  }
+
+  UpdateSound();
+}
+
+export function ClickRelay(RelayState: boolean) {
+  if (RELAY_SOUND_ENABLED) {
+    if (RelayState) {
+      PlaySoundSample(SAMPLE_RELAY_ON, false);
+    } else {
+      PlaySoundSample(SAMPLE_RELAY_OFF, false);
+    }
+  }
+}
+
+export function PlaySoundSample(sample: number, repeat: boolean) {
+  console.log(SoundSamples[sample].filename);
+  if (SoundSamples[sample].buf) {
+    SoundSamples[sample].pos = 0;
+    SoundSamples[sample].playing = true;
+    SoundSamples[sample].repeat = repeat;
+  }
+}
+
+export function StopSoundSample(sample: number) {
+  SoundSamples[sample].playing = false;
 }
 
 /**
