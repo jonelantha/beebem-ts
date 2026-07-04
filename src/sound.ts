@@ -419,58 +419,6 @@ function CyclesToSamples(BeebCycles: number) {
 }
 
 /****************************************************************************/
-/* Called in sysvia.cpp when a write is made to the 76489 sound chip        */
-/**
- * @param value int
- */
-export function Sound_RegWrite(value: number) {
-  let reg = 0,
-    tone = 0,
-    channel = 0; // may not be tone, why not index volume and tone with the same index?
-
-  if (value & 0x80) {
-    reg = (value >> 4) & 7;
-    BeebState76489.LastToneFreqSet = (2 - (reg >> 1)) & 3; // use 3 for noise (0,1->2, 2,3->1, 4,5->0, 6,7->3)
-    tone =
-      (BeebState76489.ToneFreq[BeebState76489.LastToneFreqSet] & ~15) |
-      (value & 15);
-  } else {
-    reg = ((2 - BeebState76489.LastToneFreqSet) & 3) << 1; // (0->4, 1->2, 2->0, 3->6)
-    tone =
-      (BeebState76489.ToneFreq[BeebState76489.LastToneFreqSet] & 15) |
-      ((value & 0x3f) << 4);
-  }
-
-  channel = (1 + BeebState76489.LastToneFreqSet) & 3; // (0->1, 1->2, 2->3, 3->0)
-
-  switch (reg) {
-    case 0: // Tone 3 freq
-    case 2: // Tone 2 freq
-    case 4: // Tone 1 freq
-      BeebState76489.ToneFreq[BeebState76489.LastToneFreqSet] = tone;
-      SetFreq(channel, tone);
-      break;
-
-    case 6: // Noise control
-      BeebState76489.Noise.Freq = value & 3;
-      BeebState76489.Noise.FB = (value >> 2) & 1;
-      break;
-
-    case 1: // Tone 3 vol
-    case 3: // Tone 2 vol
-    case 5: // Tone 1 vol
-    case 7: // Tone 0 vol
-      RealVolumes[channel] = value & 15;
-      if (BeebState76489.ToneVolume[channel] == 0 && (value & 15) != 15)
-        ActiveChannel[channel] = true;
-      if (BeebState76489.ToneVolume[channel] != 0 && (value & 15) == 15)
-        ActiveChannel[channel] = false;
-      BeebState76489.ToneVolume[channel] = GetVol(15 - (value & 15));
-      break;
-  }
-
-  UpdateSound();
-}
 
 /****************************************************************************/
 
@@ -585,6 +533,60 @@ export function SoundReset() {
   //   }
 
   SoundTrigger = ClearTrigger();
+}
+
+/****************************************************************************/
+/* Called in sysvia.cpp when a write is made to the 76489 sound chip        */
+/**
+ * @param value int
+ */
+export function Sound_RegWrite(value: number) {
+  let reg = 0,
+    tone = 0,
+    channel = 0; // may not be tone, why not index volume and tone with the same index?
+
+  if (value & 0x80) {
+    reg = (value >> 4) & 7;
+    BeebState76489.LastToneFreqSet = (2 - (reg >> 1)) & 3; // use 3 for noise (0,1->2, 2,3->1, 4,5->0, 6,7->3)
+    tone =
+      (BeebState76489.ToneFreq[BeebState76489.LastToneFreqSet] & ~15) |
+      (value & 15);
+  } else {
+    reg = ((2 - BeebState76489.LastToneFreqSet) & 3) << 1; // (0->4, 1->2, 2->0, 3->6)
+    tone =
+      (BeebState76489.ToneFreq[BeebState76489.LastToneFreqSet] & 15) |
+      ((value & 0x3f) << 4);
+  }
+
+  channel = (1 + BeebState76489.LastToneFreqSet) & 3; // (0->1, 1->2, 2->3, 3->0)
+
+  switch (reg) {
+    case 0: // Tone 3 freq
+    case 2: // Tone 2 freq
+    case 4: // Tone 1 freq
+      BeebState76489.ToneFreq[BeebState76489.LastToneFreqSet] = tone;
+      SetFreq(channel, tone);
+      break;
+
+    case 6: // Noise control
+      BeebState76489.Noise.Freq = value & 3;
+      BeebState76489.Noise.FB = (value >> 2) & 1;
+      break;
+
+    case 1: // Tone 3 vol
+    case 3: // Tone 2 vol
+    case 5: // Tone 1 vol
+    case 7: // Tone 0 vol
+      RealVolumes[channel] = value & 15;
+      if (BeebState76489.ToneVolume[channel] == 0 && (value & 15) != 15)
+        ActiveChannel[channel] = true;
+      if (BeebState76489.ToneVolume[channel] != 0 && (value & 15) == 15)
+        ActiveChannel[channel] = false;
+      BeebState76489.ToneVolume[channel] = GetVol(15 - (value & 15));
+      break;
+  }
+
+  UpdateSound();
 }
 
 /**
