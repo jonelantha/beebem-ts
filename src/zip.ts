@@ -99,13 +99,21 @@ export function zipExtractFile(
 
 // helpers
 
-function getData(dataView: DataView, offset: number, size: number) {
+function getData(
+  dataView: DataView<ArrayBuffer>,
+  offset: number,
+  size: number,
+): ArrayBuffer {
   const start = dataView.byteOffset + offset;
 
   return dataView.buffer.slice(start, start + size);
 }
 
-function decodeText(dataView: DataView, offset: number, sizeOffset: number) {
+function decodeText(
+  dataView: DataView<ArrayBuffer>,
+  offset: number,
+  sizeOffset: number,
+) {
   const size = dataView.getUint16(sizeOffset, true);
 
   const data = getData(dataView, offset, size);
