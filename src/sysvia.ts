@@ -100,26 +100,6 @@ const SysViaKbdState = Array.from({ length: 16 }, () =>
 ); // Col, row
 let KeysDown = 0; // static int
 
-// Master 128 MC146818AP Real-Time Clock and RAM
-//static time_t RTCTimeOffset = 0;
-
-type CMOSType = {
-  Enabled: boolean;
-  // unsigned char ChipSelect;
-  Address: number; //unsigned char
-  // unsigned char StrobedData;
-  DataStrobe: boolean;
-  Op: boolean;
-};
-
-let CMOS: CMOSType = {
-  Enabled: false,
-  Address: 0,
-  DataStrobe: false,
-  Op: false,
-};
-let OldCMOSState = false;
-
 /*--------------------------------------------------------------------------*/
 function UpdateIFRTopBit() {
   /* Update top bit of IFR */
@@ -226,7 +206,6 @@ function IC32Write(Value: number) {
   // I have to do CMOS RAM now. And I think I'm going slightly potty.
   // Additional, Sunday 4th February 2001. I must have been potty. the line above did read January 2000.
   const oldval = IC32State;
-  let tmpCMOSState;
 
   const bit = Value & 7;
   if (Value & 8) {
@@ -236,12 +215,6 @@ function IC32Write(Value: number) {
   }
   // LEDs.CapsLock=((IC32State&64)==0);
   // LEDs.ShiftLock=((IC32State&128)==0);
-  /* hmm, CMOS RAM? */
-  // Monday 5th February 2001 - Scrapped my CMOS code, and restarted as according to the bible of the god Tom Lees
-  CMOS.Op = (IC32State & 2) != 0;
-  tmpCMOSState = (IC32State & 4) != 0;
-  CMOS.DataStrobe = tmpCMOSState === OldCMOSState ? false : true;
-  OldCMOSState = tmpCMOSState;
 
   /* Must do sound reg access when write line changes */
   if (SOUNDSUPPORT) {
@@ -292,7 +265,6 @@ function SlowDataBusWrite(Value: number) {
 /*--------------------------------------------------------------------------*/
 function SlowDataBusRead() {
   let result = SysVIAState.ora & SysVIAState.ddra;
-  if (CMOS.Enabled) result = SysVIAState.ora & ~SysVIAState.ddra;
   /* I don't know this lot properly - just put in things as we figure them out */
   if (!(IC32State & 8)) {
     if (KbdOP()) result |= 128;
@@ -329,8 +301,6 @@ export function SysVIAWrite(Address: number, Value: number) {
       SysVIAState.ifr &= ~16;
       SysVIAState.orb = Value;
       IC32Write(Value);
-      CMOS.Enabled = (Value & 64) != 0; // CMOS Chip select
-      CMOS.Address = (Value & 128) >> 7 ? SysVIAState.ora : CMOS.Address; // CMOS Address strobe
       if (SysVIAState.ifr & 8 && (SysVIAState.pcr & 0x20) == 0) {
         SysVIAState.ifr &= 0xf7;
         UpdateIFRTopBit();
